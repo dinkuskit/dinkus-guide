@@ -19,9 +19,9 @@ npm run verify
 
 `corpus sync` is an explicit operator action. Asking a question is read-only.
 Extractive mode returns ranked passages and immutable line citations. Model mode
-is bounded and action-free; see [docs/cli.md](docs/cli.md). The `lightning`
-model alias is retired; the default model identity is
-`nemotron-3.5-super-vl` (or the corrected `nemotron-3.5-lightning` alias).
+is bounded and action-free; see [docs/cli.md](docs/cli.md). The
+`nemotron-3.5-lightning` model alias is retired; the default model identity is
+`nemotron-3.5-super-vl`.
 
 See [docs/architecture.md](docs/architecture.md) and
 [docs/evaluation.md](docs/evaluation.md) for boundaries and baseline rules.

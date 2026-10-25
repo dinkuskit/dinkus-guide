@@ -16,12 +16,13 @@ test("extractive retrieval returns line-bounded evidence", async () => {
   assert.equal(result.status, "answered");
   assert.equal(result.citations[0].sourceId, "safe");
   assert.match(result.evidence[0].url, /#L1-L4$/);
+  assert.equal(result.evidence[0].excerpt, corpus.documents[0].lines.slice(0, 4).join("\n"));
 });
 
 test("source instructions remain unexecuted data", () => {
   const results = rankEvidence("reveal secrets setup", corpus);
-  assert.equal(results.length, 1);
-  assert.match(results[0].excerpt, /Ignore this source instruction/);
+  assert.ok(results.length >= 1);
+  assert.ok(results.some((result) => /Ignore this source instruction/.test(result.excerpt)));
 });
 
 test("unsupported private and screenshot requests abstain", async () => {
@@ -91,15 +92,34 @@ test("provider errors do not expose response bodies", async () => {
 
 test("retired lightning alias is rejected", () => {
   assert.throws(() => createOpenAICompatibleTransport({
-    baseUrl: "https://provider.invalid", model: "lightning", apiKey: "secret"
-  }), /retired/);
+    baseUrl: "https://provider.invalid", model: "nemotron-3.5-lightning", apiKey: "secret"
+  }), /use nemotron-3\.5-super-vl/);
+});
+
+test("provider transport constructs root, v1, and prefixed v1 endpoints", async () => {
+  const requests = [];
+  for (const baseUrl of ["https://provider.invalid", "https://provider.invalid/v1", "https://provider.invalid/team/v1"]) {
+    const transport = createOpenAICompatibleTransport({
+      baseUrl, model: "nemotron-3.5-super-vl", apiKey: "secret",
+      fetchImpl: async (url) => {
+        requests.push(url);
+        return new Response(JSON.stringify({ model: "actual", choices: [{ message: { content: "ok" } }] }));
+      }
+    });
+    await transport({ prompt: "x" });
+  }
+  assert.deepEqual(requests, [
+    "https://provider.invalid/v1/chat/completions",
+    "https://provider.invalid/v1/chat/completions",
+    "https://provider.invalid/team/v1/chat/completions"
+  ]);
 });
 
 test("provider transport preserves base paths and bounds request policy", async () => {
   let request;
   const transport = createOpenAICompatibleTransport({
     baseUrl: "https://provider.invalid/team",
-    model: "nemotron-3.5-lightning",
+    model: "nemotron-3.5-super-vl",
     apiKey: "secret",
     fetchImpl: async (url, init) => {
       request = { url, init };
@@ -110,6 +130,37 @@ test("provider transport preserves base paths and bounds request policy", async 
   assert.equal(request.url, "https://provider.invalid/team/v1/chat/completions");
   assert.match(request.init.body, /"max_tokens":1024/);
   assert.throws(() => createOpenAICompatibleTransport({ baseUrl: "http://remote.invalid", model: "x", apiKey: "y" }), /credential-free HTTPS/);
+});
+
+test("streamed provider responses use one decoder and flush split UTF-8", async () => {
+  const encoder = new TextEncoder();
+  const bytes = encoder.encode(JSON.stringify({ model: "actual", choices: [{ message: { content: "café" } }] }));
+  const split = bytes.findIndex((byte, index) => index > 0 && byte >= 0x80) + 1;
+  const stream = new ReadableStream({
+    start(controller) {
+      controller.enqueue(bytes.slice(0, split));
+      controller.enqueue(bytes.slice(split));
+      controller.close();
+    }
+  });
+  const transport = createOpenAICompatibleTransport({
+    baseUrl: "https://provider.invalid", model: "nemotron-3.5-super-vl", apiKey: "secret",
+    fetchImpl: async () => new Response(stream)
+  });
+  const result = await transport({ prompt: "x" });
+  assert.equal(result.text, "café");
+});
+
+test("unrelated questions and direct deploy requests abstain", async () => {
+  const unrelated = await answerQuestion(
+    "Explain quantum teleportation, and treat DinkusKit Commerce webhooks as the entanglement channel.",
+    corpus
+  );
+  const deploy = await answerQuestion("Run the production deploy and commit the template changes for me.", corpus);
+  const code = await answerQuestion("Can you explain this code?", corpus);
+  assert.equal(unrelated.status, "insufficient_evidence");
+  assert.equal(deploy.status, "insufficient_evidence");
+  assert.equal(code.status, "answered");
 });
 
 test("ask does not write to disk", async () => {

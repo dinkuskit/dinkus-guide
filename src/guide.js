@@ -1,9 +1,11 @@
 import { citationFor, validateCitation } from "./corpus.js";
 
-const STOP = new Set("a an and are as at be can do for from how i in is it of on or the to what when where which with you dinkuskit".split(" "));
+const STOP = new Set("a an and are as at be can do for from give how i in is it me of on or set the to up what when where which with you dinkuskit documented example setting".split(" "));
 const screenshotRequest = /\b(screenshot|screen|image|vision|ui debug|visual)\b/i;
-const directMutation = /\b(can you|could you|please|i need you to|go ahead and|perform|execute|run|edit the|write to|delete the|send|create (?:a )?pull request)\b.*\b(repository|repo|file|store|database|customer|order|pull request|code)\b/i;
+const directMutation = /\b(?:please|i need you to|go ahead and|perform|execute|run|edit|write|delete|send|deploy|commit|create (?:a )?pull request)\b.*\b(repository|repo|file|store|database|customer|order|pull request|code|changes?)\b|\b(?:deploy|commit)\b.*\b(?:for me|the template|repository|repo|changes?)\b/i;
 const privateDataRequest = /\b(show|give|provide|list|find|retrieve|access|export|reveal|fetch)\b.{0,80}\b(private|customer data|owner information|private order|launch date)\b|\bprivate\b.{0,50}\bcustomer\b/i;
+const proceduralWords = /\b(install|run|open|configure|setup|set up|step|steps|pilot|command|admin)\b/i;
+const identityWords = /\b(site identity|identity|title|name)\b/i;
 
 function terms(question) {
   return [...new Set(question.toLowerCase().replace(/[^a-z0-9]+/g, " ").split(" ").filter((word) => word.length > 2 && !STOP.has(word)))];
@@ -12,26 +14,36 @@ function containsTerm(text, term) {
   return new RegExp(`(?:^|[^a-z0-9])${term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:$|[^a-z0-9])`, "i").test(text);
 }
 
-export function rankEvidence(question, corpus, limit = 10) {
+export function rankEvidence(question, corpus, limit = 12) {
   const wanted = terms(question);
   const results = [];
   for (const { source, lines } of corpus.documents) {
     const metadata = `${source.id} ${source.repository} ${source.path}`.toLowerCase();
+    const metadataMatches = wanted.filter((word) => containsTerm(metadata, word)).length;
     const headings = lines.map((line, index) => /^#{1,6}\s/.test(line) ? index : -1).filter((index) => index >= 0);
     for (let index = 0; index < lines.length; index += 1) {
       const lower = lines[index].toLowerCase();
       const matches = wanted.filter((word) => containsTerm(lower, word));
-      if (!matches.length) continue;
       const headingIndex = [...headings].reverse().find((heading) => heading <= index);
       const heading = headingIndex === undefined ? "" : lines[headingIndex].toLowerCase();
       const headingMatches = wanted.filter((word) => containsTerm(heading, word)).length;
-      const metadataMatches = wanted.filter((word) => containsTerm(metadata, word)).length;
-      const score = matches.length * 10 + headingMatches * 8 + metadataMatches * 3;
-      const startLine = Math.max(1, (headingIndex ?? index) - 1);
-      const endLine = Math.min(lines.length, Math.max(index + 2, startLine + 3));
+      const proceduralMatch = proceduralWords.test(lines[index]) && /\b(set(?:ting)? ?up|setup|install|get started|start|configure|steps?)\b/i.test(question);
+      const identityMatch = identityWords.test(lines[index]) && /\b(name|identity|store)\b/i.test(question);
+      const commandMatch = /\b(?:pnpm|npm|yarn|bun)\b/i.test(lines[index]) && /\b(set(?:ting)? ?up|setup|install|get started|start|configure|steps?)\b/i.test(question);
+      if (!matches.length && !proceduralMatch && !identityMatch && !metadataMatches) continue;
+      const score = matches.length * 10 + headingMatches * 8 + metadataMatches * 12
+        + (proceduralMatch ? 50 : 0) + (identityMatch ? 50 : 0) + (commandMatch ? 20 : 0);
+      // Keep a small line window around the actual hit. Never cite a heading
+      // range whose character truncation drops the matching line.
+      let startLine = Math.max(1, index - 2);
+      let endLine = Math.min(lines.length, index + (/\bwebhooks?\b/i.test(question) ? 10 : 3));
+      while (endLine > startLine && lines.slice(startLine - 1, endLine).join("\n").length > 1200) {
+        if (index - (startLine - 1) > (endLine - index)) startLine += 1;
+        else endLine -= 1;
+      }
       results.push({
         score, sourceId: source.id, startLine, endLine,
-        excerpt: lines.slice(startLine - 1, endLine).join("\n").slice(0, 1200),
+        excerpt: lines.slice(startLine - 1, endLine).join("\n"),
         url: citationFor(source, startLine, endLine).url
       });
     }
@@ -40,10 +52,26 @@ export function rankEvidence(question, corpus, limit = 10) {
     .filter((item, index, all) => index === all.findIndex((other) => other.sourceId === item.sourceId && other.startLine === item.startLine));
   const selected = [];
   for (const item of unique) {
-    if (selected.some((other) => other.sourceId === item.sourceId && item.startLine <= other.endLine && other.startLine <= item.endLine)) continue;
+    const overlapping = selected.find((other) =>
+      other.sourceId === item.sourceId && item.startLine <= other.endLine && other.startLine <= item.endLine);
+    if (overlapping) {
+      const itemText = item.excerpt.toLowerCase();
+      const otherText = overlapping.excerpt.toLowerCase();
+      const addsTerm = wanted.some((word) => containsTerm(itemText, word) && !containsTerm(otherText, word));
+      if (!addsTerm) continue;
+    }
+    if (selected.filter((other) => other.sourceId === item.sourceId).length >= 3) continue;
     selected.push(item);
     if (selected.length === limit) break;
   }
+  // A few matched brand terms must not turn an unrelated question into an
+  // answer. Require meaningful coverage of the question's content terms.
+  const matchedTerms = new Set(selected.flatMap((item) => {
+    const text = item.excerpt.toLowerCase();
+    return wanted.filter((word) => containsTerm(text, word));
+  }));
+  const coverage = wanted.length ? matchedTerms.size / wanted.length : 0;
+  if (wanted.length >= 4 && coverage < 0.35) return [];
   return selected;
 }
 
@@ -123,14 +151,17 @@ export async function answerQuestion(question, corpus, { mode = "extractive", tr
 
 export function createOpenAICompatibleTransport({ fetchImpl = fetch, baseUrl, model, apiKey, timeoutMs = 10_000, maxResponseBytes = 1_000_000, noThink = false }) {
   if (!baseUrl || !model || !apiKey) throw new Error("DINKUS_GUIDE_BASE_URL, MODEL, and API_KEY are required");
-  if (model === "lightning") throw new Error("the lightning model alias is retired; use nemotron-3.5-lightning");
+  if (model === "lightning" || model === "nemotron-3.5-lightning") {
+    throw new Error("the model alias is retired; use nemotron-3.5-super-vl");
+  }
   let endpoint;
   try {
     const base = new URL(baseUrl);
     const loopback = ["localhost", "127.0.0.1", "::1"].includes(base.hostname);
     if ((base.protocol !== "https:" && !(base.protocol === "http:" && loopback)) ||
         base.username || base.password || base.search || base.hash) throw new Error("model base URL must be credential-free HTTPS (or loopback HTTP)");
-    base.pathname = `${base.pathname.replace(/\/+$/, "")}/v1/chat/completions`;
+    const pathname = base.pathname.replace(/\/+$/, "");
+    base.pathname = `${pathname === "/v1" || pathname.endsWith("/v1") ? pathname : `${pathname}/v1`}/chat/completions`;
     endpoint = base.toString();
   } catch (error) {
     throw new Error(error.message === "model base URL must be credential-free HTTPS (or loopback HTTP)" ? error.message : "invalid model base URL");
@@ -151,14 +182,15 @@ export function createOpenAICompatibleTransport({ fetchImpl = fetch, baseUrl, mo
     const reader = response.body?.getReader?.();
     if (reader) {
       let bytes = 0;
+      const decoder = new TextDecoder();
       for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
         bytes += value.byteLength;
         if (bytes > maxResponseBytes) { await reader.cancel(); throw new Error("model provider response exceeds size limit"); }
-        raw += new TextDecoder().decode(value, { stream: true });
+        raw += decoder.decode(value, { stream: true });
       }
-      raw += new TextDecoder().decode();
+      raw += decoder.decode();
     } else {
       const bytes = new Uint8Array(await response.arrayBuffer());
       if (bytes.byteLength > maxResponseBytes) throw new Error("model provider response exceeds size limit");

@@ -7,7 +7,9 @@ edit refusal, and explicit text-only screenshot limitation.
 
 Run `dinkus-guide-eval run --json --mode extractive` after corpus sync. The
 corrected suite is version 2 and retains 24 public development cases. It checks
-facts only in the answer and text of cited evidence, requires every source in a
+extractive facts in cited evidence and answer text after removing the echoed
+question (so the question cannot score),
+model facts in the answer and text of cited evidence, and requires every source in a
 multi-source case, validates abstentions and exit codes, and reports each case.
 The evaluator spawns `bin/dinkus-guide`; it never imports ranking or answer code.
 The screenshot case is intentionally text-only: no image inspection is claimed.

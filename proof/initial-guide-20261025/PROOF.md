@@ -1,6 +1,6 @@
 # DinkusGuide repair proof
 
-Repair base: `5dc17f39d922a86ef56acdf27d7cf83265a132b9`.
+Repair base: `da7febcd0161e6ff7701ae48cf1ede4599977338`.
 
 ## Preserved history
 
@@ -13,24 +13,32 @@ was provider-unavailable evidence, not live-model quality.
 
 - Direct mutations/private-data extraction are refused while read-only how-to
   questions and public customer concepts remain answerable.
-- Retrieval requires substantive exact topical terms, uses heading-aware bounded
-  passages, and suppresses redundant overlap. Unsupported-version and no-evidence
-  checks are shared by extractive and provider modes.
+- Retrieval requires substantive exact topical terms, uses bounded windows around
+  actual matches, preserves excerpt/citation spans exactly, diversifies sources,
+  and adds generic procedural/context ranking for setup and webhook questions.
+  Unsupported-version and no-evidence checks are shared by extractive and provider
+  modes. Direct deploy/commit requests refuse while benign read-only explanations
+  remain answerable.
 - Model output validates source spans without trusting model URLs; the Guide
   constructs authoritative URLs, requires citations for answered output and none
   for insufficient evidence, and rejects forged spans, empty answers and tools.
   Requested and actual returned model identities are separate.
 - HTTP has timeout, `max_tokens`, bounded response bytes, redirect refusal,
-  credential-free HTTPS (or loopback HTTP), path-preserving v1 append, and an
-  optional local Super VL no-think control.
+  credential-free HTTPS (or loopback HTTP), correct root/`/v1`/prefixed-`/v1`
+  endpoint construction, one streamed-response decoder with flush, and an
+  optional local Super VL no-think control. The retired
+  `nemotron-3.5-lightning` alias advises `nemotron-3.5-super-vl`.
 - Sync validates approved public repositories, cache containment and symlinks,
   bounded downloads, timeout, and atomic verified writes.
 
 Corrected public suite: `corrected-public-development-v2` version 2, 24 cases.
-Extractive result: 19/24 (79.2%), corpus hash
+Extractive result: 22/24 (91.7%), corpus hash
 `377d1157e8448dd28d1dd9d834ac3be6608ddb45c162b516f8be61b010571346`.
-Misses: `ownership`, `commerce-docs`, `template`, `emdash-start`, `webhook`.
-These remain visible; expected facts were not changed to raise the score.
+Misses: `ownership`, `blocks-retired`. The corrected evaluator normalizes
+whitespace for facts, scores extractive facts from the answer after removing the
+echoed question plus cited evidence, and exits nonzero for unavailable model
+reports (`score: null`). Expected facts and cases were not changed to raise the
+score.
 
 Model evaluation with no configured provider reports `unavailable` and
 `score: null`, not zero model quality. No live model, secret, private source,
@@ -39,12 +47,14 @@ consumer separately.
 
 ## Verification
 
-- `npm test`: 17/17 passed.
+- `npm test`: 20/20 passed.
 - `npm run verify`: passed.
 - `dinkus-guide corpus sync --json`: passed, 15 sources, corpus hash above.
 - `dinkus-guide corpus verify --json`: passed.
-- Samples: template-color how-to answered; quantum teleportation insufficient;
-  Stripe webhook answered with pinned evidence; screenshot request explicitly
+- Samples: template setup cites `pnpm install --frozen-lockfile` and `pnpm dev`;
+  store-name guidance cites site identity; Stripe webhook cites the endpoint,
+  Connected accounts, event, and authoritative lookup; quantum teleportation is
+  insufficient; deploy/commit is refused; screenshot request is explicitly
   text-only/insufficient.
 - CLI unknown `--bogus`: exit 2.
 

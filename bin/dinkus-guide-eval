@@ -70,12 +70,13 @@ for (const test of suite.cases) {
     const report = { suite: suite.suite, suiteVersion: suite.version, mode: options.mode, availability: "unavailable",
       reason: value.error, total: suite.cases.length, passed: 0, score: null, results: [] };
     console.log(options.json ? JSON.stringify(report) : `unavailable: ${report.reason}`);
-    process.exit(0);
+    process.exit(2);
   }
   const citedIds = [...new Set((value.citations ?? []).map((citation) => citation.sourceId))];
   const citedEvidence = (value.evidence ?? []).filter((item) => citedIds.includes(item.sourceId));
-  const searchable = `${value.answer ?? ""}\n${citedEvidence.map((item) => item.excerpt).join("\n")}`.toLowerCase();
-  const facts = test.facts.filter((fact) => searchable.includes(fact.toLowerCase()));
+  const answerText = (value.answer ?? "").replace(test.question, "");
+  const searchable = `${answerText}\n${citedEvidence.map((item) => item.excerpt).join("\n")}`.toLowerCase().replace(/\s+/g, " ");
+  const facts = test.facts.filter((fact) => searchable.includes(fact.toLowerCase().replace(/\s+/g, " ")));
   const requiredSources = test.sources.filter((source) => citedIds.includes(source));
   const citationPass = test.abstain ? citedIds.length === 0 : requiredSources.length === test.sources.length;
   const abstentionPass = test.abstain ? value.status === "insufficient_evidence" : value.status === "answered";

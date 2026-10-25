@@ -1,6 +1,6 @@
 {
   "name": "@dinkuskit/dinkus-guide",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Read-only, source-backed DinkusKit and EmDash guide",
   "type": "module",
   "license": "MIT",
