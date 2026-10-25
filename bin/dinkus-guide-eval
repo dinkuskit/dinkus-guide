@@ -2,7 +2,7 @@
 import { readFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const args = process.argv.slice(2);
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -40,6 +40,14 @@ function runCli(cliArgs) {
 
 function runGuide(question, mode) { return runCli(["ask", question, "--json", "--mode", mode]); }
 
+export function evidenceForCitations(evidence, citations) {
+  return (evidence ?? []).filter((item) => (citations ?? []).some((citation) =>
+    citation.sourceId === item.sourceId &&
+    citation.startLine === item.startLine &&
+    citation.endLine === item.endLine));
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
 let options;
 try { options = parseArgs(); } catch (error) {
   console.error(`dinkus-guide-eval: ${error.message}`);
@@ -72,8 +80,9 @@ for (const test of suite.cases) {
     console.log(options.json ? JSON.stringify(report) : `unavailable: ${report.reason}`);
     process.exit(2);
   }
-  const citedIds = [...new Set((value.citations ?? []).map((citation) => citation.sourceId))];
-  const citedEvidence = (value.evidence ?? []).filter((item) => citedIds.includes(item.sourceId));
+  const citations = value.citations ?? [];
+  const citedIds = [...new Set(citations.map((citation) => citation.sourceId))];
+  const citedEvidence = evidenceForCitations(value.evidence, citations);
   const answerText = (value.answer ?? "").replace(test.question, "");
   const searchable = `${answerText}\n${citedEvidence.map((item) => item.excerpt).join("\n")}`.toLowerCase().replace(/\s+/g, " ");
   const facts = test.facts.filter((fact) => searchable.includes(fact.toLowerCase().replace(/\s+/g, " ")));
@@ -92,3 +101,4 @@ const report = { suite: suite.suite, suiteVersion: suite.version, mode: options.
 if (options.json) console.log(JSON.stringify(report));
 else console.log(`${passed}/${results.length} passed (${(report.score * 100).toFixed(1)}%) in ${options.mode} mode`);
 process.exit(passed === results.length ? 0 : 1);
+}

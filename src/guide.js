@@ -2,10 +2,15 @@ import { citationFor } from "./corpus.js";
 
 const STOP = new Set("a an and are as at be can do explain for from give how i in is it me of on or please set tell the to treat up what when where which with you dinkuskit documented example setting".split(" "));
 const screenshotRequest = /\b(screenshot|screen|image|vision|ui debug|visual)\b/i;
-const directMutation = /\b(?:please|i need you to|go ahead and|perform|execute|run|edit|write|delete|send|deploy|commit|create (?:a )?pull request)\b.*\b(repository|repo|file|store|database|customer|order|pull request|code|changes?)\b|\b(?:deploy|commit)\b.*\b(?:for me|the template|repository|repo|changes?)\b/i;
+const instructionalHowTo = /\b(?:how (?:do|can) i|please explain how|explain how|steps? (?:to|for)|guide me (?:through|to))\b/i;
+const directAction = /\b(?:i need you to|go ahead and|perform|execute|run|edit|write|delete|send|deploy|commit|create (?:a )?pull request)\b.*\b(repository|repo|file|store|database|customer|order|pull request|code|changes?)\b|\b(?:deploy|commit)\b.*\b(?:for me|the template|repository|repo|changes?)\b/i;
 const privateDataRequest = /\b(show|give|provide|list|find|retrieve|access|export|reveal|fetch)\b.{0,80}\b(private|customer data|owner information|private order|launch date)\b|\bprivate\b.{0,50}\bcustomer\b/i;
 const proceduralWords = /\b(install|run|open|configure|setup|set up|step|steps|pilot|command|admin)\b/i;
 const identityWords = /\b(site identity|identity|title|name)\b/i;
+
+function directMutation(question) {
+  return !instructionalHowTo.test(question) && directAction.test(question);
+}
 
 function terms(question) {
   return [...new Set(question.toLowerCase().replace(/[^a-z0-9]+/g, " ").split(" ").filter((word) => word.length > 2 && !STOP.has(word)))];
@@ -93,7 +98,7 @@ function unsupportedVersion(question, corpus) {
 }
 
 function extractive(question, corpus) {
-  if (screenshotRequest.test(question) || directMutation.test(question) || privateDataRequest.test(question)) {
+  if (screenshotRequest.test(question) || directMutation(question) || privateDataRequest.test(question)) {
     return insufficient(screenshotRequest.test(question)
       ? "DinkusGuide is text-only in v1 and cannot inspect screenshots or prove a UI state. Provide a documented text contract or consult the pinned sources."
       : "DinkusGuide is read-only and cannot access private data or perform changes.");
@@ -140,7 +145,7 @@ export async function answerQuestion(question, corpus, { mode = "extractive", tr
   if (typeof question !== "string" || !question.trim()) throw new Error("question must be non-empty");
   if (mode === "extractive") return { mode, corpusHash: corpus.corpusHash, ...extractive(question, corpus) };
   if (mode !== "model") throw new Error("mode must be extractive or model");
-  if (screenshotRequest.test(question) || directMutation.test(question) || privateDataRequest.test(question)) {
+  if (screenshotRequest.test(question) || directMutation(question) || privateDataRequest.test(question)) {
     return { mode, corpusHash: corpus.corpusHash, ...extractive(question, corpus) };
   }
   if (unsupportedVersion(question, corpus)) {

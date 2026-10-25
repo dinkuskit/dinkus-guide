@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { answerQuestion, createOpenAICompatibleTransport, rankEvidence, validateEvidenceIds } from "../src/guide.js";
 import { validateCitation } from "../src/corpus.js";
+import { evidenceForCitations } from "../bin/dinkus-guide-eval";
 
 const corpus = {
   corpusHash: "test-corpus",
@@ -36,8 +37,10 @@ test("unsupported private and screenshot requests abstain", async () => {
 test("read-only how-to questions about changes and customer concepts remain answerable", async () => {
   const colors = await answerQuestion("How do I change the template store colors?", corpus);
   const customerDocs = await answerQuestion("Explain the public customer setup documentation.", corpus);
+  const setup = await answerQuestion("Please explain how to set up the template store.", corpus);
   assert.equal(colors.status, "answered");
   assert.equal(customerDocs.status, "answered");
+  assert.equal(setup.status, "answered");
 });
 
 test("unrelated topical questions do not retrieve brand-only snippets", async () => {
@@ -264,6 +267,16 @@ test("unrelated questions and direct deploy requests abstain", async () => {
   assert.equal(unrelated.status, "insufficient_evidence");
   assert.equal(deploy.status, "insufficient_evidence");
   assert.equal(code.status, "answered");
+});
+
+test("evaluator only searches facts in exactly cited evidence windows", () => {
+  const evidence = [
+    { sourceId: "source", startLine: 1, endLine: 2, excerpt: "cited fact" },
+    { sourceId: "source", startLine: 10, endLine: 11, excerpt: "uncited fact" }
+  ];
+  const cited = evidenceForCitations(evidence, [{ sourceId: "source", startLine: 1, endLine: 2 }]);
+  assert.deepEqual(cited, [evidence[0]]);
+  assert.doesNotMatch(cited.map(({ excerpt }) => excerpt).join("\n"), /uncited fact/);
 });
 
 test("ask does not write to disk", async () => {

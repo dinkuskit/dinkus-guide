@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { lstat, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const MAX_BYTES = 1_000_000;
 const SHA256 = /^[a-f0-9]{64}$/;
@@ -11,7 +12,7 @@ const APPROVED_REPOSITORIES = new Set([
   "dinkuskit/template-store", "emdash-cms/emdash", "dinkuskit/blocks"
 ]);
 
-export const root = path.resolve(new URL("..", import.meta.url).pathname);
+export const root = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 export const manifestPath = path.join(root, "corpus", "manifest.json");
 export const cacheRoot = path.join(root, ".cache", "dinkus-guide");
 
