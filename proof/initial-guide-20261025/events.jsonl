@@ -2,3 +2,4 @@
 {"event":"implemented","date":"2026-10-25","sources":15,"corpusHash":"377d1157e8448dd28d1dd9d834ac3be6608ddb45c162b516f8be61b010571346","tests":"12/12","extractiveBaseline":"20/24","modelBaseline":"0/24 provider-unavailable","liveModelInvoked":false}
 {"event": "final_baselines", "source": "b2429ffe5b2f6217fb3eb1b96ad9b422ef293027", "tests": 25, "extractive": "23/24", "model": "18/24", "modelIdentity": "nemotron-3.5-super-vl", "status": "review_pending"}
 {"event": "review_repair_verified", "time": "2026-10-25T20:43:36.422551+00:00", "source": "13f1a0c35b1ac523d6be413b0209d9ffb30e177c", "acceptedFindings": 3, "tests": 27, "extractive": "23/24", "actualModel": "19/24", "next": "exact-head comprehensive review"}
+{"event": "second_review_repair_verified", "time": "2026-10-25T20:50:14.620327+00:00", "source": "39484bcfdf90411b9fe2756d976683a9c51f976a", "tests": 31, "extractive": "23/24", "frozenOutputsChanged": 0, "repairCycles": 2}

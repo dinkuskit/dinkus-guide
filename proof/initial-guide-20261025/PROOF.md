@@ -1,6 +1,7 @@
 # DinkusGuide v1 proof
 
-Implementation tested: `13f1a0c35b1ac523d6be413b0209d9ffb30e177c`.
+Implementation tested locally: `39484bcfdf90411b9fe2756d976683a9c51f976a`.
+Actual model run source: `13f1a0c35b1ac523d6be413b0209d9ffb30e177c`.
 Base: `ca39eb7500b8c8f57526385700244e7cb9cbc4ae`.
 PR: https://github.com/dinkuskit/dinkus-guide/pull/1
 
@@ -15,7 +16,7 @@ The coordinator performed source review, provider proof, and this closeout.
 
 ## Reproducible checks
 
-- `npm test`: 27/27 pass.
+- `npm test`: 31/31 pass.
 - `npm run verify`: pass; 15 pinned public documents.
 - `node bin/dinkus-guide corpus verify --json`: pass.
 - `node bin/dinkus-guide-eval run --json --mode extractive`: 23/24 (95.8%).
@@ -69,6 +70,13 @@ Grok ACP's six-case source-blind retest passed on `b2429ff`, including prior
 retrieval failures and no-write proof. It is historical evidence for that head,
 not an exact-head verdict on the repairs. The [three-question repaired-head retest](INDEPENDENT_PROOF.md) passed
 on `13f1a0c`, with unchanged source and cache. No independent held-out model accuracy is claimed.
+
+The second review accepted four further fixes: product-only overview retrieval,
+plain `how to` questions, serialized IPv6 loopback addresses, and corpus error
+exit codes in model mode. They are covered by the 31 passing tests. All 24 frozen
+extractive outputs before and after these fixes were byte-for-byte unchanged.
+The actual 19/24 model run remains bound to `13f1a0c`; it was not rerun after
+this small repair. See [round 2](REVIEW_2.md).
 
 ## Review state
 
