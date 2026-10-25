@@ -1,0 +1,13 @@
+{
+  "sourceHead": "a0a435ed1fc1c6a07f838451455e7c10b4253937",
+  "suite": "corrected-public-development-v3",
+  "suiteVersion": 3,
+  "corpusHash": "e2ec499d5c054e3e4a3bbbc30d8aa4f387f7c5a189a794022c3e5ce362d5bda4",
+  "model": "nemotron-3.5-super-vl",
+  "maxTokens": 1024,
+  "enableThinking": false,
+  "providerRequests": 18,
+  "wallElapsedMs": 50610,
+  "consumer": "Local OpenAI-compatible loopback forward to the nemotron-3.5-super-vl test consumer; no permanent integration or deployment.",
+  "scope": "Public approved source excerpts only; no action tools."
+}

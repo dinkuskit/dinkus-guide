@@ -4,7 +4,7 @@ Repository: dinkuskit/dinkus-guide, PR 1.
 Base: ca39eb7500b8c8f57526385700244e7cb9cbc4ae.
 Reviewed head: 6a849d645f5f004375aa46d8ad419769a900a1de.
 Request: req-20261025T204459Z-80168116250.
-Reviewer: Spark-2 OpenClaw, Codex gpt-6.1-sol.
+Reviewer: OpenClaw, Codex gpt-6.1-sol.
 Scope: comprehensive, P3 maximum, exact_tuple_qualified=true.
 Terminal: four findings, not clean.
 
