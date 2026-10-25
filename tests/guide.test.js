@@ -635,3 +635,47 @@ test("symlinked evaluator runs suite and reports rejected provider settings as u
     await rm(temporaryRoot, { recursive: true, force: true });
   }
 });
+
+test("v-prefixed and major-only version requests normalize prefixes and avoid substring false matches", async () => {
+  const versionCorpus = {
+    corpusHash: "version-corpus",
+    documents: [{
+      source: { id: "version-doc", provenance: "https://github.com/example/repo/blob/0123456789012345678901234567890123456789/README.md" },
+      lines: [
+        "# Template store setup",
+        "Set up the template store with DinkusKit 1.2.0, template 0.41.0, plugin 0.24.0, EmDash v22.23.4, and Commerce v0.3.0-beta.4.",
+        "Future release notes describe EmDash 100.2.0 installation."
+      ]
+    }]
+  };
+
+  for (const unsupported of [
+    "How do I set up the template store v99.99?",
+    "How do I set up the template store v99.99.",
+    "How do I set up the template store V2.0?",
+    "How do I set up the template store v99?",
+    "How do I set up the template store version 99?",
+    "How do I set up the template store v24?",
+    "What is Commerce v0.3.0-rc.9?"
+  ]) {
+    const extractiveResult = await answerQuestion(unsupported, versionCorpus);
+    const modelResult = await answerQuestion(unsupported, versionCorpus, {
+      mode: "model",
+      transport: async () => { throw new Error("transport must not run for unsupported versions"); }
+    });
+    assert.equal(extractiveResult.status, "insufficient_evidence", unsupported);
+    assert.match(extractiveResult.answer, /requested version/, unsupported);
+    assert.equal(modelResult.status, "insufficient_evidence", unsupported);
+  }
+
+  for (const supported of [
+    "How do I set up the template store v0.41.0?",
+    "How do I set up EmDash 22.23.4?",
+    "How do I set up EmDash v22.23.4?",
+    "How do I install EmDash v100.2.0?",
+    "How do I set up the template store v1?"
+  ]) {
+    const result = await answerQuestion(supported, versionCorpus);
+    assert.equal(result.status, "answered", supported);
+  }
+});

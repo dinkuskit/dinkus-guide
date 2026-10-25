@@ -21,11 +21,13 @@ function directMutation(question) {
 }
 
 function terms(question) {
-  const words = [...new Set(question.toLowerCase().replace(/[^a-z0-9]+/g, " ").split(" ").filter((word) => word.length > 2 && !STOP.has(word)))];
+  const normalized = question.replace(/(?<![a-z0-9])v(?=\d)/gi, "");
+  const words = [...new Set(normalized.toLowerCase().replace(/[^a-z0-9]+/g, " ").split(" ").filter((word) => word.length > 2 && !STOP.has(word)))];
   return words.length || !/\bdinkuskit\b/i.test(question) ? words : ["dinkuskit"];
 }
 function containsTerm(text, term) {
-  return new RegExp(`(?:^|[^a-z0-9])${term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:$|[^a-z0-9])`, "i").test(text);
+  const prefix = /^\d+$/.test(term) ? "(?:^|[^a-z0-9]|(?<![a-z0-9])v)" : "(?:^|[^a-z0-9])";
+  return new RegExp(`${prefix}${term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:$|[^a-z0-9])`, "i").test(text);
 }
 
 export function rankEvidence(question, corpus, limit = 12) {
@@ -105,10 +107,25 @@ function insufficient(answer) {
   return { status: "insufficient_evidence", answer, evidence: [], citations: [] };
 }
 
+const dottedVersionPattern = /(?<![A-Za-z0-9]|\d\.)v?(\d+(?:\.\d+)+(?:-[A-Za-z0-9]+(?:\.[A-Za-z0-9]+)*)?)(?![A-Za-z0-9]|\.[A-Za-z0-9]|-[A-Za-z0-9])/gi;
+const majorVersionPattern = /(?<![A-Za-z0-9_-]|\.[A-Za-z0-9])(?:v|version\s+)(\d+)(?![A-Za-z0-9_-]|\.[A-Za-z0-9])/gi;
+
+function extractDottedVersions(text) {
+  return Array.from(text.matchAll(dottedVersionPattern), (match) => match[1].toLowerCase());
+}
+
 function unsupportedVersion(question, corpus) {
-  const requestedVersions = question.match(/\b\d+(?:\.\d+)+\b/g) ?? [];
-  return requestedVersions.length && !corpus.documents.some(({ lines }) =>
-    requestedVersions.every((version) => lines.some((line) => line.includes(version))));
+  const dotted = extractDottedVersions(question);
+  const majors = Array.from(question.matchAll(majorVersionPattern), (match) => match[1]);
+  if (!dotted.length && !majors.length) return false;
+  return !corpus.documents.some(({ lines }) => {
+    const docDotted = dotted.length ? new Set(lines.flatMap(extractDottedVersions)) : null;
+    if (dotted.some((version) => !docDotted.has(version))) return false;
+    return majors.every((major) => {
+      const re = new RegExp(`(?<![A-Za-z0-9]|\\d\\.)v?${major}(?:\\.\\d+)*(?![A-Za-z0-9]|\\.[A-Za-z0-9])`, "i");
+      return lines.some((line) => re.test(line));
+    });
+  });
 }
 
 function extractive(question, corpus) {
