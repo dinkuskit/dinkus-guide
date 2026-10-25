@@ -63,6 +63,35 @@ test("malformed model output and tool calls are rejected", async () => {
   await assert.rejects(answerQuestion("setup", corpus, { mode: "model", transport: async () => ({ text: "{}", tools: true }) }), /tool output/);
 });
 
+test("model request prompt uses exact JSON evidence and citation rules", async () => {
+  let request;
+  await answerQuestion("setup", corpus, {
+    mode: "model",
+    transport: async (value) => {
+      request = value;
+      return { text: JSON.stringify({
+        status: "answered", answer: "Use the public setup command.",
+        citations: [{ sourceId: "safe", startLine: 1, endLine: 3 }]
+      }) };
+    }
+  });
+  assert.match(request.prompt, /ALLOWED SOURCE IDS:\n\["safe"\]/);
+  assert.deepEqual((({ sourceId, startLine, endLine, excerpt, url }) => ({
+    sourceId, startLine, endLine, excerpt, url
+  }))(request.evidence[0]), {
+    sourceId: "safe", startLine: 1, endLine: 3,
+    excerpt: corpus.documents[0].lines.slice(0, 3).join("\n"),
+    url: "https://github.com/example/repo/blob/0123456789012345678901234567890123456789/README.md#L1-L3"
+  });
+  assert.match(request.prompt, /EVIDENCE JSON:\n\[\{"sourceId":"safe","startLine":1,"endLine":3,"excerpt":"/);
+  assert.match(request.prompt, /sourceId must be exactly one allowed value/);
+  assert.match(request.prompt, /Never append line ranges/);
+  assert.match(request.prompt, /insufficient_evidence with citations=\[\]/);
+  assert.match(request.prompt, /answered only when the answer is supported and include at least one citation/);
+  assert.match(request.prompt, /Every citation span must be wholly within the supplied evidence item/);
+  assert.doesNotMatch(request.prompt, /\[safe L1-4\]/);
+});
+
 test("model citations use source spans and receive authoritative URLs", async () => {
   const result = await answerQuestion("setup", corpus, {
     mode: "model",

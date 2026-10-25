@@ -23,6 +23,11 @@ was provider-unavailable evidence, not live-model quality.
   constructs authoritative URLs, requires citations for answered output and none
   for insufficient evidence, and rejects forged spans, empty answers and tools.
   Requested and actual returned model identities are separate.
+- Prompt correction recorded from the bounded actual-model test: 19 model calls
+  exposed ambiguous source formatting, including a returned `sourceId` with an
+  appended line range. Model prompts now use unambiguous JSON evidence objects,
+  exact allowed IDs, and explicit answered/insufficient citation rules. This
+  addresses formatting ambiguity only; it is not weight training or Harness².
 - HTTP has timeout, `max_tokens`, bounded response bytes, redirect refusal,
   credential-free HTTPS (or loopback HTTP), correct root/`/v1`/prefixed-`/v1`
   endpoint construction, one streamed-response decoder with flush, and an
