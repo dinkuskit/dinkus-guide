@@ -8,8 +8,8 @@
   ],
   "corpusHash": "377d1157e8448dd28d1dd9d834ac3be6608ddb45c162b516f8be61b010571346",
   "total": 24,
-  "passed": 18,
-  "score": 0.75,
+  "passed": 19,
+  "score": 0.7916666666666666,
   "results": [
     {
       "id": "ownership",
@@ -109,15 +109,15 @@
     },
     {
       "id": "template",
-      "status": "error",
-      "factsMatched": 0,
+      "status": "answered",
+      "factsMatched": 1,
       "factsRequired": 1,
-      "citationsMatched": 0,
+      "citationsMatched": 1,
       "citationsRequired": 1,
-      "abstentionPass": false,
-      "citationPass": false,
-      "exitCode": 4,
-      "pass": false
+      "abstentionPass": true,
+      "citationPass": true,
+      "exitCode": 0,
+      "pass": true
     },
     {
       "id": "template-purpose",

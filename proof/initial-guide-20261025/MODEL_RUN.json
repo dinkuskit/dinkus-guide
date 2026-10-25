@@ -1,11 +1,12 @@
 {
-  "sourceHead": "b2429ffe5b2f6217fb3eb1b96ad9b422ef293027",
+  "sourceHead": "13f1a0c35b1ac523d6be413b0209d9ffb30e177c",
   "model": "nemotron-3.5-super-vl",
   "maxTokens": 1024,
   "enableThinking": false,
   "providerRequests": 18,
-  "summedRequestElapsedMs": 56143,
+  "summedRequestElapsedMs": 54153,
   "consumer": "Existing Spark DGX benchmark consumer through a temporary local loopback adapter; no permanent integration or deployment.",
   "runtimeSource": "saari-co/spark-dgx@35d2eeb2bd55b2c038745025efa89cb7413a5a65",
-  "scope": "Public approved source excerpts only; no action tools."
+  "scope": "Public approved source excerpts only; no action tools.",
+  "priorAttempt": "One attempt timed out at the 10-second client boundary; one bounded retry completed. No timeout setting was changed."
 }

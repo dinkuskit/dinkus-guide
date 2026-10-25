@@ -27,3 +27,5 @@ See [docs/architecture.md](docs/architecture.md) and
 [docs/evaluation.md](docs/evaluation.md) for boundaries and baseline rules.
 The package and its original code are MIT; third-party source provenance and
 licenses are recorded per manifest entry and are not redistributed in git.
+
+Measured development baselines and known limits are in [the proof record](proof/initial-guide-20261025/PROOF.md).
