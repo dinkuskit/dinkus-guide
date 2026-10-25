@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { answerQuestion, createOpenAICompatibleTransport, rankEvidence } from "../src/guide.js";
+import { answerQuestion, createOpenAICompatibleTransport, rankEvidence, validateEvidenceIds } from "../src/guide.js";
 import { validateCitation } from "../src/corpus.js";
 
 const corpus = {
@@ -51,10 +51,37 @@ test("forged model citations are rejected", async () => {
     answerQuestion("setup", corpus, {
       mode: "model",
       transport: async () => ({ model: "nemotron-3.5-super-vl", text: JSON.stringify({
-        status: "answered", answer: "claim", citations: [{ sourceId: "other", startLine: 1, endLine: 1 }]
+        status: "answered", answer: "claim", citationIds: ["E999"]
       }) })
     }),
-    /forged citation/
+    /invalid citation IDs/
+  );
+});
+
+test("legacy model citation objects and invalid IDs are rejected", async () => {
+  await assert.rejects(
+    answerQuestion("setup", corpus, {
+      mode: "model",
+      transport: async () => ({ text: JSON.stringify({
+        status: "answered", answer: "claim", citationIds: [{ sourceId: "safe", startLine: 1, endLine: 1 }]
+      }) })
+    }),
+    /invalid citation IDs/
+  );
+  assert.equal(validateEvidenceIds([{ id: "E1" }, { id: "E1" }]), false);
+  assert.equal(validateEvidenceIds([{ id: "E1" }, { id: "not-an-id" }]), false);
+  assert.equal(validateEvidenceIds([{ id: "E1" }, { id: "E2" }]), true);
+});
+
+test("insufficient model output requires empty citation IDs", async () => {
+  await assert.rejects(
+    answerQuestion("setup", corpus, {
+      mode: "model",
+      transport: async () => ({ text: JSON.stringify({
+        status: "insufficient_evidence", answer: "Not enough support.", citationIds: ["E1"]
+      }) })
+    }),
+    /insufficient evidence must use citationIds=\[\]/
   );
 });
 
@@ -71,11 +98,11 @@ test("model request prompt uses exact JSON evidence and citation rules", async (
       request = value;
       return { text: JSON.stringify({
         status: "answered", answer: "Use the public setup command.",
-        citations: [{ sourceId: "safe", startLine: 1, endLine: 3 }]
+        citationIds: ["E1"]
       }) };
     }
   });
-  assert.match(request.prompt, /ALLOWED SOURCE IDS:\n\["safe"\]/);
+  assert.match(request.prompt, /"id":"E1","sourceId":"safe"/);
   assert.deepEqual((({ sourceId, startLine, endLine, excerpt, url }) => ({
     sourceId, startLine, endLine, excerpt, url
   }))(request.evidence[0]), {
@@ -83,12 +110,10 @@ test("model request prompt uses exact JSON evidence and citation rules", async (
     excerpt: corpus.documents[0].lines.slice(0, 3).join("\n"),
     url: "https://github.com/example/repo/blob/0123456789012345678901234567890123456789/README.md#L1-L3"
   });
-  assert.match(request.prompt, /EVIDENCE JSON:\n\[\{"sourceId":"safe","startLine":1,"endLine":3,"excerpt":"/);
-  assert.match(request.prompt, /sourceId must be exactly one allowed value/);
-  assert.match(request.prompt, /Never append line ranges/);
-  assert.match(request.prompt, /insufficient_evidence with citations=\[\]/);
-  assert.match(request.prompt, /answered only when the answer is supported and include at least one citation/);
-  assert.match(request.prompt, /Every citation span must be wholly within the supplied evidence item/);
+  assert.match(request.prompt, /EVIDENCE JSON:\n\[\{"id":"E1","sourceId":"safe","startLine":1,"endLine":3,"excerpt":"/);
+  assert.match(request.prompt, /Do not generate source IDs, URLs, line ranges, or citation objects/);
+  assert.match(request.prompt, /insufficient_evidence with citationIds=\[\]/);
+  assert.match(request.prompt, /answered only when the answer is supported and include at least one known evidence id/);
   assert.doesNotMatch(request.prompt, /\[safe L1-4\]/);
 });
 
@@ -97,7 +122,7 @@ test("model citations use source spans and receive authoritative URLs", async ()
     mode: "model",
     transport: async () => ({ model: "actual-provider-model", requestedModel: "configured-model", text: JSON.stringify({
       status: "answered", answer: "Use the public setup command.",
-      citations: [{ sourceId: "safe", startLine: 1, endLine: 3 }]
+      citationIds: ["E1"]
     }) })
   });
   assert.equal(result.modelIdentity, "actual-provider-model");
