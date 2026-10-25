@@ -1,19 +1,13 @@
-# Initial Guide repair task
+# Initial Guide delivery
 
-- Status: repair implemented and locally verified
-- Repository: dinkuskit/dinkus-guide
+- Status: implemented; final independent proof and exact-head review pending
+- Repository: dinkuskit/dinkus-guide, PR #1
 - Branch: codex/dinkus-guide-initial-20261025
-- Worktree: /Users/bobbybones/Developer/worktrees/dinkus-guide-initial-20261025
-- Base: 5dc17f39d922a86ef56acdf27d7cf83265a132b9
+- Source tested: b2429ffe5b2f6217fb3eb1b96ad9b422ef293027
 - Owner / closer: Codex coordinator for Bobby
-- Mode: mutate source and isolated local tests
-- Scope: read-only Guide, evaluator, measured baseline, deferred Harness² plan
-- Gate: human merge/deploy; no private knowledge or credential provisioning
-- Result: corrected public suite 19/24; model mode unavailable without provider;
-  five extractive misses and screenshot text-only limitation remain documented.
-- Next: parent independently reviews exact head and runs the approved Super VL
-  consumer; no push/PR/live-model work was performed here.
-
-Success requires a usable CLI and honest source-backed baseline, no runtime
-deployment. Public GitHub repository was explicitly requested and created with
-only its generated README on main; all implementation occurs in this worktree.
+- Mutation owner: coordinator for proof/docs closeout; ACP source writers finished
+- Scope: read-only Guide, separate evaluator, measured public baseline
+- Results: 25 tests; extractive 23/24; actual Super VL 18/24
+- Gates: human merge/deploy; no private corpus, training, or credential provisioning
+- Next: complete independent CLI proof, push proof, check CI and exact-head review
+- Stop: reviewable PR with truthful proof and any remaining review dependency

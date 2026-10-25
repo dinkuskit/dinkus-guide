@@ -1,69 +1,61 @@
-# DinkusGuide repair proof
+# DinkusGuide v1 proof
 
-Repair base: `da7febcd0161e6ff7701ae48cf1ede4599977338`.
+Implementation tested: `b2429ffe5b2f6217fb3eb1b96ad9b422ef293027`.
+Base: `ca39eb7500b8c8f57526385700244e7cb9cbc4ae`.
+PR: https://github.com/dinkuskit/dinkus-guide/pull/1
 
-## Preserved history
+## What exists
 
-The original v1 extractive result was 20/24 (83.3%), using a flawed scorer that
-searched `JSON.stringify` of the entire result. It remains history only and is
-superseded by corrected suite/scorer version 2. The original model 0/24 result
-was provider-unavailable evidence, not live-model quality.
+A read-only Node 24 CLI, 15 explicitly pinned public source documents, immutable
+line citations, bounded optional model answering, and a separate CLI evaluator.
+Source synchronization is an explicit operator action; answering has no action
+tools. No private archives, store access, deployment, or training are included.
+Cursor ACP implemented the source; Grok ACP provided independent CLI proof.
+The coordinator performed source review, provider proof, and this closeout.
 
-## Repair and results
+## Reproducible checks
 
-- Direct mutations/private-data extraction are refused while read-only how-to
-  questions and public customer concepts remain answerable.
-- Retrieval requires substantive exact topical terms, uses bounded windows around
-  actual matches, preserves excerpt/citation spans exactly, diversifies sources,
-  and adds generic procedural/context ranking for setup and webhook questions.
-  Unsupported-version and no-evidence checks are shared by extractive and provider
-  modes. Direct deploy/commit requests refuse while benign read-only explanations
-  remain answerable.
-- Model output validates source spans without trusting model URLs; the Guide
-  constructs authoritative URLs, requires citations for answered output and none
-  for insufficient evidence, and rejects forged spans, empty answers and tools.
-  Requested and actual returned model identities are separate.
-- Runtime integration history retained from the bounded actual-model consumer
-  at the repair sequence: the old prompt scored 6/24, and the explicit source
-  schema scored 17/24. These are runtime integration results, not fabricated
-  pass results. The follow-up wire correction assigns unique per-request
-  evidence IDs and accepts only model `citationIds`; source spans and URLs are
-  resolved authoritatively inside the Guide.
-- HTTP has timeout, `max_tokens`, bounded response bytes, redirect refusal,
-  credential-free HTTPS (or loopback HTTP), correct root/`/v1`/prefixed-`/v1`
-  endpoint construction, one streamed-response decoder with flush, and an
-  optional local Super VL no-think control. The retired
-  `nemotron-3.5-lightning` alias advises `nemotron-3.5-super-vl`.
-- Sync validates approved public repositories, cache containment and symlinks,
-  bounded downloads, timeout, and atomic verified writes.
+- `npm test`: 25/25 pass.
+- `npm run verify`: pass; 15 pinned public documents.
+- `node bin/dinkus-guide corpus verify --json`: pass.
+- `node bin/dinkus-guide-eval run --json --mode extractive`: 23/24 (95.8%).
+- `node bin/dinkus-guide-eval run --json --mode model`: actual local
+  `nemotron-3.5-super-vl`, 18/24 (75%).
 
-Corrected public suite: `corrected-public-development-v2` version 2, 24 cases.
-Extractive result: 22/24 (91.7%), corpus hash
-`377d1157e8448dd28d1dd9d834ac3be6608ddb45c162b516f8be61b010571346`.
-Misses: `ownership`, `blocks-retired`. The corrected evaluator normalizes
-whitespace for facts, scores extractive facts from the answer after removing the
-echoed question plus cited evidence, and exits nonzero for unavailable model
-reports (`score: null`). Expected facts and cases were not changed to raise the
-score.
+Both evaluations use `corrected-public-development-v2`, version 2, and corpus
+hash `377d1157e8448dd28d1dd9d834ac3be6608ddb45c162b516f8be61b010571346`.
+See [extractive results](EXTRACTIVE_BASELINE.json), [model results](MODEL_BASELINE.json),
+and [model run metadata](MODEL_RUN.json). These are public development-checklist
+scores, not independent held-out accuracy or production-readiness claims.
 
-Model evaluation with no configured provider reports `unavailable` and
-`score: null`, not zero model quality. No live model, secret, private source,
-deployment, push, or PR was used; the parent must run the approved Super VL
-consumer separately.
+Actual model proof used the existing Spark DGX benchmark consumer through a
+temporary local loopback adapter. Credentials stayed inside that existing
+consumer. The adapter forwarded only the bounded public question/excerpts;
+there were 18 provider requests, a 1,024-token output cap and thinking disabled.
+Six refusals/unsupported cases were resolved before requesting the model.
+This proves model answering through that test route, not permanent credential
+integration, a deployed service, Discord availability, or screenshot support.
+Spark runtime source was `35d2eeb2bd55b2c038745025efa89cb7413a5a65` (PR #292).
 
-## Verification
+## Known misses and next bounded work
 
-- `npm test`: 20/20 passed.
-- `npm run verify`: passed.
-- `dinkus-guide corpus sync --json`: passed, 15 sources, corpus hash above.
-- `dinkus-guide corpus verify --json`: passed.
-- Samples: template setup cites `pnpm install --frozen-lockfile` and `pnpm dev`;
-  store-name guidance cites site identity; Stripe webhook cites the endpoint,
-  Connected accounts, event, and authoritative lookup; quantum teleportation is
-  insufficient; deploy/commit is refused; screenshot request is explicitly
-  text-only/insufficient.
-- CLI unknown `--bogus`: exit 2.
+Extractive mode lacks sufficient evidence for the ownership question. The model
+shares that miss. Four other model cases (checkout, Stripe test mode, Ship
+status, template setup) emitted an empty abstention answer, which correctly
+failed the current output contract. Cross-payments answered but omitted a
+required source citation. Preserve these misses; do not tune the answer key.
+Next work should improve supported abstentions and source coverage, then repeat
+the frozen suite. Screenshots remain explicitly unsupported in this text-only
+version. Harness², model training, public gateway admission, and workload
+onboarding remain separate future work.
 
-Limitations remain: extractive answers are passage-oriented, five public cases
-still miss, and screenshot/video inspection is explicitly unavailable. The
-24-case suite remains text-only.
+[Repair history](REPAIR_HISTORY.md) preserves earlier results and the initial
+scorer correction. Its older scores and pending-provider statements are
+historical, superseded by this proof. No holdout has been used for optimization.
+
+## Review state
+
+CI, comprehensive Spark-2 review, and native ClawSweeper evidence must be checked
+against the delivered head before merge. No merge or deployment has occurred.
+Independent final proof and review receipts are recorded separately as they
+complete; a queued request is not a clean verdict.
