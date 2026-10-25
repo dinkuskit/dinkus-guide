@@ -1,7 +1,7 @@
 # DinkusGuide v1 proof
 
-Implementation tested locally: `19eaf171d3a6acbbe86f5164626573b40e336b3f`.
-Actual model run source: `cb4e9be43466fca0ccb1fa45fdb951e7abd1930d` (exact `src/` rerun) and `a0a435ed1fc1c6a07f838451455e7c10b4253937` (initial `v3` run).
+Implementation tested locally: `f602d6a7501a91751fc83d5a5962b8dc0b388dfa`.
+Actual model run source: `cb4e9be43466fca0ccb1fa45fdb951e7abd1930d` and `a0a435ed1fc1c6a07f838451455e7c10b4253937` (all 24 `v3` retrieval windows and model prompts are byte-for-byte identical in `f602d6a`).
 Base: `ca39eb7500b8c8f57526385700244e7cb9cbc4ae`.
 PR: https://github.com/dinkuskit/dinkus-guide/pull/1
 
@@ -87,6 +87,11 @@ historical, superseded by this proof. No holdout has been used for optimization.
   (preserving `--json` stdout error formatting across CLI argument-parsing
   failures in `dinkus-guide` and `dinkus-guide-eval`; `src/` and extractive
   outputs unchanged).
+- [Round 6](REVIEW_6.md) (`f78821b`): one P2 finding fixed in `f602d6a`
+  (enforcing overall and non-procedural topical term coverage across all query
+  lengths so procedural bonuses alone cannot answer unsupported short setup or
+  install questions; all 24 `v3` retrieval windows and extractive outputs
+  remained byte-for-byte unchanged).
 
 ## Review state
 
