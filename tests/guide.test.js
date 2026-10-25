@@ -46,6 +46,55 @@ test("unrelated topical questions do not retrieve brand-only snippets", async ()
   assert.deepEqual(result.citations, []);
 });
 
+test("procedure retrieval keeps adjacent numbered steps in one cited span", async () => {
+  const procedureCorpus = {
+    corpusHash: "procedure-corpus",
+    documents: [{
+      source: { id: "procedure", provenance: "https://github.com/example/repo/blob/0123456789012345678901234567890123456789/README.md" },
+      lines: [
+        "# Editor guide",
+        "## Edit page content",
+        "",
+        "Use the page editor for documented content.",
+        "",
+        "<Steps>",
+        "",
+        "1. Open Posts, then open Welcome.",
+        "",
+        "2. Change the title, then select Save.",
+        "",
+        "3. Publish changes.",
+        "",
+        "</Steps>"
+      ]
+    }]
+  };
+  const result = await answerQuestion("How do I edit page content?", procedureCorpus);
+  assert.equal(result.status, "answered");
+  assert.ok(result.evidence.some(({ startLine, endLine, excerpt }) =>
+    startLine <= 8 && endLine >= 10 && /Open Posts/.test(excerpt) && /Change the title/.test(excerpt)));
+});
+
+test("mixed unsupported topics do not pass through a known product distractor", async () => {
+  const distractorCorpus = {
+    corpusHash: "distractor-corpus",
+    documents: [{
+      source: { id: "commerce", provenance: "https://github.com/example/repo/blob/0123456789012345678901234567890123456789/README.md" },
+      lines: [
+        "# DinkusKit Commerce",
+        "Commerce documents describe webhook delivery through a channel.",
+        "The product supports checkout and orders."
+      ]
+    }]
+  };
+  const result = await answerQuestion(
+    "Explain quantum teleportation, and treat DinkusKit Commerce webhooks as the entanglement channel.",
+    distractorCorpus
+  );
+  assert.equal(result.status, "insufficient_evidence");
+  assert.deepEqual(result.citations, []);
+});
+
 test("forged model citations are rejected", async () => {
   await assert.rejects(
     answerQuestion("setup", corpus, {

@@ -1,6 +1,6 @@
 import { citationFor } from "./corpus.js";
 
-const STOP = new Set("a an and are as at be can do for from give how i in is it me of on or set the to up what when where which with you dinkuskit documented example setting".split(" "));
+const STOP = new Set("a an and are as at be can do explain for from give how i in is it me of on or please set tell the to treat up what when where which with you dinkuskit documented example setting".split(" "));
 const screenshotRequest = /\b(screenshot|screen|image|vision|ui debug|visual)\b/i;
 const directMutation = /\b(?:please|i need you to|go ahead and|perform|execute|run|edit|write|delete|send|deploy|commit|create (?:a )?pull request)\b.*\b(repository|repo|file|store|database|customer|order|pull request|code|changes?)\b|\b(?:deploy|commit)\b.*\b(?:for me|the template|repository|repo|changes?)\b/i;
 const privateDataRequest = /\b(show|give|provide|list|find|retrieve|access|export|reveal|fetch)\b.{0,80}\b(private|customer data|owner information|private order|launch date)\b|\bprivate\b.{0,50}\bcustomer\b/i;
@@ -33,10 +33,17 @@ export function rankEvidence(question, corpus, limit = 12) {
       if (!matches.length && !proceduralMatch && !identityMatch && !metadataMatches) continue;
       const score = matches.length * 10 + headingMatches * 8 + metadataMatches * 12
         + (proceduralMatch ? 50 : 0) + (identityMatch ? 50 : 0) + (commandMatch ? 20 : 0);
-      // Keep a small line window around the actual hit. Never cite a heading
-      // range whose character truncation drops the matching line.
+      // Keep a compact, line-bounded window around the actual hit. If the hit
+      // is part of a nearby titled section, retain that heading so a short
+      // procedure is not split across incidental windows.
       let startLine = Math.max(1, index - 2);
       let endLine = Math.min(lines.length, index + (/\bwebhooks?\b/i.test(question) ? 10 : 3));
+      if (headingIndex !== undefined && headingIndex > 0 && index - headingIndex <= 12) {
+        startLine = headingIndex + 1;
+        const closingSteps = lines.findIndex((line, lineIndex) =>
+          lineIndex >= index && lineIndex - headingIndex <= 24 && /<\/Steps>\s*$/i.test(line));
+        if (closingSteps >= 0) endLine = Math.max(endLine, closingSteps + 1);
+      }
       while (endLine > startLine && lines.slice(startLine - 1, endLine).join("\n").length > 1200) {
         if (index - (startLine - 1) > (endLine - index)) startLine += 1;
         else endLine -= 1;
@@ -71,7 +78,7 @@ export function rankEvidence(question, corpus, limit = 12) {
     return wanted.filter((word) => containsTerm(text, word));
   }));
   const coverage = wanted.length ? matchedTerms.size / wanted.length : 0;
-  if (wanted.length >= 4 && coverage < 0.35) return [];
+  if (wanted.length >= 4 && coverage < 0.6) return [];
   return selected;
 }
 
