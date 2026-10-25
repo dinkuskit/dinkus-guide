@@ -332,13 +332,26 @@ test("streamed provider responses use one decoder and flush split UTF-8", async 
 });
 
 test("unrelated questions and direct deploy requests abstain", async () => {
+  const codeCorpus = {
+    corpusHash: "code-corpus",
+    documents: [{
+      source: { id: "code-doc", provenance: "https://github.com/example/repo/blob/0123456789012345678901234567890123456789/README.md" },
+      lines: ["# Code structure", "Public template code is documented here."]
+    }]
+  };
   const unrelated = await answerQuestion(
     "Explain quantum teleportation, and treat DinkusKit Commerce webhooks as the entanglement channel.",
     corpus
   );
+  const shortUnsupportedSetup = await answerQuestion("How do I set up quantum teleportation?", corpus);
+  const shortUnsupportedStart = await answerQuestion("How do I get started with Kubernetes?", corpus);
+  const shortUnsupportedInstall = await answerQuestion("How do I install Redis?", corpus);
   const deploy = await answerQuestion("Run the production deploy and commit the template changes for me.", corpus);
-  const code = await answerQuestion("Can you explain this code?", corpus);
+  const code = await answerQuestion("Can you explain this code?", codeCorpus);
   assert.equal(unrelated.status, "insufficient_evidence");
+  assert.equal(shortUnsupportedSetup.status, "insufficient_evidence");
+  assert.equal(shortUnsupportedStart.status, "insufficient_evidence");
+  assert.equal(shortUnsupportedInstall.status, "insufficient_evidence");
   assert.equal(deploy.status, "insufficient_evidence");
   assert.equal(code.status, "answered");
 });

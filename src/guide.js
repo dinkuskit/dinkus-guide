@@ -1,6 +1,11 @@
 import { citationFor } from "./corpus.js";
 
-const STOP = new Set("a an and are as at be can do explain for from give how i in is it me of on or please set tell the to treat up what when where which with you dinkuskit documented example setting".split(" "));
+const STOP = new Set("a an and are as at be can do explain for from give how i in is it me of on or please set tell that the this to treat up what when where which with you dinkuskit documented example setting".split(" "));
+const genericQueryWords = new Set([
+  "get", "started", "start", "install", "setup", "configure", "step", "steps",
+  "run", "use", "used", "command", "commands", "does", "should", "would", "could",
+  "work", "say", "cover", "define", "handle", "handled", "relate", "current", "status", "they"
+]);
 const screenshotRequest = /\b(?:screenshots?|screen\s*captures?|screencasts?|ui debug(?:ging)?|image input|visual input|vision model)\b|\b(?:attached|pasted)\s+(?:[a-z0-9._-]+\s+)?(?:images?|pictures?|photos?|screens?|ui)\b|\b(?:this|that)\s+(?:images?|pictures?|photos?)\b|\bvisible (?:in|on) (?:this|that|the|my) (?:screens?|images?|pictures?|photos?|ui)\b|\b(?:inspect|analyze|analyse|examine|check|look at|view|read|describe|ocr|debug)\b[^?!;\n]{0,30}\b(?:this|that|the attached|the provided|attached|pasted)\s+(?:[a-z0-9._-]+\s+)?(?:images?|pictures?|photos?|screens?|ui)\b/i;
 const instructionalHowTo = /\b(?:how (?:(?:do|can|should|would|could) (?:i|we|you|one|users?|operators?|developers?)|to|is|are|does)|(?:please )?(?:explain|describe|show(?: me)?|tell me) (?:how|what|which|where|when)|steps? (?:to|for)|guide me (?:through|to)|(?:what|which)\b[^?!;\n]{0,40}\b(?:commands?|scripts?|flags?|options?|arguments?|steps?|ways?|workflows?|procedures?|docs?|documentation)\b|(?:what|which|where|when)\b[^?!;\n]{0,30}\b(?:(?:do|can|should|would|could) (?:i|we|one)|(?:i|we|one) (?:do|can|should|would|could|need to|have to|must))\b|(?:where|when) (?:is|are|does)\b)/i;
 const explicitDelegation = /\b(?:i need you to|go ahead and|(?:can|could|will|would) you) (?:please )?(?:perform|execute|run|edit|write|delete|send|deploy|commit|create)\b|,\s*(?:and\s+|then\s+|also\s+)?(?:please\s+)?(?:perform|execute|run|edit|write|delete|send|deploy|commit|create (?:a )?pull request)\b[^?!;\n]*\bfor me\b/i;
@@ -80,14 +85,19 @@ export function rankEvidence(question, corpus, limit = 12) {
     selected.push(item);
     if (selected.length === limit) break;
   }
-  // A few matched brand terms must not turn an unrelated question into an
-  // answer. Require meaningful coverage of the question's content terms.
+  // A few matched brand or procedural terms must not turn an unrelated question
+  // into an answer. Require meaningful coverage of the question's content and
+  // non-procedural topical terms across all query lengths.
   const matchedTerms = new Set(selected.flatMap((item) => {
     const text = item.excerpt.toLowerCase();
     return wanted.filter((word) => containsTerm(text, word));
   }));
   const coverage = wanted.length ? matchedTerms.size / wanted.length : 0;
-  if (wanted.length >= 4 && coverage < 0.6) return [];
+  const topical = wanted.filter((word) => !genericQueryWords.has(word));
+  const topicalCoverage = topical.length
+    ? topical.filter((word) => matchedTerms.has(word)).length / topical.length
+    : coverage;
+  if (!wanted.length || coverage < 0.6 || topicalCoverage < 0.6) return [];
   return selected;
 }
 
