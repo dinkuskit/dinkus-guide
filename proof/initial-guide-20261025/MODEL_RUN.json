@@ -1,0 +1,12 @@
+{
+  "sourceHead": "13f1a0c35b1ac523d6be413b0209d9ffb30e177c",
+  "model": "nemotron-3.5-super-vl",
+  "maxTokens": 1024,
+  "enableThinking": false,
+  "providerRequests": 18,
+  "summedRequestElapsedMs": 54153,
+  "consumer": "Local OpenAI-compatible loopback forward to the nemotron-3.5-super-vl test consumer; no permanent integration or deployment.",
+  "runtimeSource": "35d2eeb2bd55b2c038745025efa89cb7413a5a65",
+  "scope": "Public approved source excerpts only; no action tools.",
+  "priorAttempt": "One attempt timed out at the 10-second client boundary; one bounded retry completed. No timeout setting was changed."
+}

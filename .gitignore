@@ -1,0 +1,6 @@
+.cache/
+runs/
+node_modules/
+.env
+.env.*
+!.env.example
