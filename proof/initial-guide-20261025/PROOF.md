@@ -1,7 +1,7 @@
 # DinkusGuide v1 proof
 
-Implementation tested locally: `f602d6a7501a91751fc83d5a5962b8dc0b388dfa`.
-Actual model run source: `cb4e9be43466fca0ccb1fa45fdb951e7abd1930d` and `a0a435ed1fc1c6a07f838451455e7c10b4253937` (all 24 `v3` retrieval windows and model prompts are byte-for-byte identical in `f602d6a`).
+Implementation tested locally: `31749240e6d34a4b2285eefe35e6eee13f058d97`.
+Actual model run source: `cb4e9be43466fca0ccb1fa45fdb951e7abd1930d` and `a0a435ed1fc1c6a07f838451455e7c10b4253937` (all 24 `v3` retrieval windows and model prompts are byte-for-byte identical in `3174924`; `src/` is unchanged from `f602d6a`).
 Base: `ca39eb7500b8c8f57526385700244e7cb9cbc4ae`.
 PR: https://github.com/dinkuskit/dinkus-guide/pull/1
 
@@ -15,7 +15,7 @@ No private archives, store access, deployment, or training are included.
 
 ## Reproducible checks
 
-- `npm test`: 37/37 pass.
+- `npm test`: 38/38 pass.
 - `npm run verify`: pass; 15 pinned public documents.
 - `node bin/dinkus-guide corpus verify --json`: pass.
 - `node bin/dinkus-guide-eval run --json --mode extractive`: 23/24 (95.8%).
@@ -92,6 +92,10 @@ historical, superseded by this proof. No holdout has been used for optimization.
   lengths so procedural bonuses alone cannot answer unsupported short setup or
   install questions; all 24 `v3` retrieval windows and extractive outputs
   remained byte-for-byte unchanged).
+- [Round 7](REVIEW_7.md) (`f66b762`): two findings in `bin/dinkus-guide-eval`
+  fixed in `3174924` (resolving symlinks before checking the evaluator entry
+  point and reporting rejected pre-request provider configurations as
+  `unavailable` rather than zero-score model runs; `src/` unchanged).
 
 ## Review state
 
