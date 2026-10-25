@@ -72,7 +72,8 @@ try {
   output(await answerQuestion(positional.slice(1).join(" "), corpus, { mode: parsed.mode, transport }), parsed.json);
 } catch (error) {
   const code = Number.isInteger(error?.code) ? error.code : (parsed?.mode === "model" ? 4 : 3);
-  if (parsed?.json) console.log(JSON.stringify({ status: "error", error: error.message }));
+  const jsonOutput = Boolean(parsed?.json || args.includes("--json"));
+  if (jsonOutput) console.log(JSON.stringify({ status: "error", error: error.message }));
   else console.error(`dinkus-guide: ${error.message}`);
   process.exit(code);
 }

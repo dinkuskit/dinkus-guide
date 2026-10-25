@@ -48,16 +48,20 @@ export function evidenceForCitations(evidence, citations) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-let options;
-try { options = parseArgs(); } catch (error) {
-  console.error(`dinkus-guide-eval: ${error.message}`);
+const jsonOutput = args.includes("--json");
+const failUsage = (message) => {
+  if (jsonOutput) console.log(JSON.stringify({ status: "error", error: message }));
+  else console.error(`dinkus-guide-eval: ${message}`);
   process.exit(2);
-}
-if (options.command !== "run") {
+};
+let options;
+try { options = parseArgs(); } catch (error) { failUsage(error.message); }
+if (options.command === null) {
   console.log("Usage: dinkus-guide-eval run [--json] [--mode extractive|model]");
-  process.exit(options.command === null ? 0 : 2);
+  process.exit(0);
 }
-if (!["extractive", "model"].includes(options.mode)) { console.error("mode must be extractive or model"); process.exit(2); }
+if (options.command !== "run") failUsage(`unexpected command: ${options.command}`);
+if (!["extractive", "model"].includes(options.mode)) failUsage("mode must be extractive or model");
 
 const suite = JSON.parse(await readFile(path.join(root, "eval", "cases.json"), "utf8"));
 const corpusRun = await runCli(["corpus", "verify", "--json"]);

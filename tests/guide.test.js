@@ -4,6 +4,7 @@ import { spawn } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 import { answerQuestion, createOpenAICompatibleTransport, rankEvidence, validateEvidenceIds } from "../src/guide.js";
 import { validateCitation } from "../src/corpus.js";
 import { evidenceForCitations } from "../bin/dinkus-guide-eval";
@@ -491,5 +492,31 @@ test("corpus verify normalizes filesystem ENOENT to exit code 3 when cache is mi
     }
   } finally {
     await rm(temporaryRoot, { recursive: true, force: true });
+  }
+});
+
+test("CLI argument-parsing failures preserve JSON error output on stdout", async () => {
+  const guideCli = fileURLToPath(new URL("../bin/dinkus-guide", import.meta.url));
+  const evalCli = fileURLToPath(new URL("../bin/dinkus-guide-eval", import.meta.url));
+  const cases = [
+    [guideCli, ["ask", "setup", "--json", "--bogus"], /unknown option: --bogus/],
+    [guideCli, ["ask", "setup", "--bogus", "--json"], /unknown option: --bogus/],
+    [guideCli, ["ask", "setup", "--json", "--json"], /duplicate --json/],
+    [guideCli, ["ask", "setup", "--mode", "--json"], /missing or duplicate --mode/],
+    [evalCli, ["run", "--json", "--bogus"], /unknown option: --bogus/],
+    [evalCli, ["run", "--json", "--mode", "invalid"], /mode must be extractive or model/]
+  ];
+  for (const [binPath, cliArgs, expectedError] of cases) {
+    const result = await new Promise((resolve) => {
+      const child = spawn(process.execPath, [binPath, ...cliArgs], { env: { PATH: process.env.PATH } });
+      let stdout = "", stderr = "";
+      child.stdout.on("data", (chunk) => { stdout += chunk; });
+      child.stderr.on("data", (chunk) => { stderr += chunk; });
+      child.on("close", (code) => resolve({ code, stderr, value: JSON.parse(stdout) }));
+    });
+    assert.equal(result.code, 2);
+    assert.equal(result.stderr, "");
+    assert.equal(result.value.status, "error");
+    assert.match(result.value.error, expectedError);
   }
 });
