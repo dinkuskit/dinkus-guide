@@ -184,7 +184,8 @@ export async function answerQuestion(question, corpus, { mode = "extractive", tr
     const { sourceId, startLine, endLine } = modelEvidence.find((item) => item.id === id);
     return citationFor(corpus.documents.find(({ source }) => source.id === sourceId).source, startLine, endLine);
   });
-  return { mode, corpusHash: corpus.corpusHash, requestedModel: response.requestedModel, modelIdentity: response.model,
+  const modelIdentity = typeof response.model === "string" && response.model.trim() ? response.model.trim() : null;
+  return { mode, corpusHash: corpus.corpusHash, requestedModel: response.requestedModel ?? null, modelIdentity,
     status: parsed.status, answer: parsed.answer, evidence, citations };
 }
 
@@ -240,6 +241,7 @@ export function createOpenAICompatibleTransport({ fetchImpl = fetch, baseUrl, mo
     const choice = body?.choices?.[0];
     if (choice?.message?.tool_calls?.length || choice?.message?.function_call) throw new Error("model provider attempted a tool call");
     if (typeof choice?.message?.content !== "string") throw new Error("model provider response has no text");
-    return { text: choice.message.content, model: body.model || model, requestedModel: model };
+    if (typeof body?.model !== "string" || !body.model.trim()) throw new Error("model provider response has no model identity");
+    return { text: choice.message.content, model: body.model.trim(), requestedModel: model };
   };
 }

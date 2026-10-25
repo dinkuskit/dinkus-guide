@@ -213,6 +213,30 @@ test("model citations use source spans and receive authoritative URLs", async ()
   assert.match(result.citations[0].url, /github\.com\/example\/repo/);
 });
 
+test("missing or blank provider model identity is never substituted from requestedModel", async () => {
+  for (const invalidModel of [undefined, "", "   "]) {
+    const transport = createOpenAICompatibleTransport({
+      baseUrl: "https://provider.invalid",
+      model: "nemotron-3.5-super-vl",
+      apiKey: "secret",
+      fetchImpl: async () => new Response(JSON.stringify({
+        ...(invalidModel === undefined ? {} : { model: invalidModel }),
+        choices: [{ message: { content: "ok" } }]
+      }))
+    });
+    await assert.rejects(transport({ prompt: "x" }), /no model identity/);
+  }
+  const missingFromCustomTransport = await answerQuestion("setup", corpus, {
+    mode: "model",
+    transport: async () => ({
+      requestedModel: "configured-model",
+      text: JSON.stringify({ status: "answered", answer: "Use the public setup command.", citationIds: ["E1"] })
+    })
+  });
+  assert.equal(missingFromCustomTransport.requestedModel, "configured-model");
+  assert.equal(missingFromCustomTransport.modelIdentity, null);
+});
+
 test("citation validation rejects paths outside the source", () => {
   assert.equal(validateCitation({ sourceId: "safe", startLine: 1, endLine: 6 }, corpus), false);
 });
