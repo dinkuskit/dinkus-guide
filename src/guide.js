@@ -1,15 +1,18 @@
 import { citationFor } from "./corpus.js";
 
 const STOP = new Set("a an and are as at be can do explain for from give how i in is it me of on or please set tell the to treat up what when where which with you dinkuskit documented example setting".split(" "));
-const screenshotRequest = /\b(screenshot|screen|image|vision|ui debug|visual)\b/i;
-const instructionalHowTo = /\b(?:how (?:do|can) i|how to|please explain how|explain how|steps? (?:to|for)|guide me (?:through|to))\b/i;
-const directAction = /\b(?:i need you to|go ahead and|perform|execute|run|edit|write|delete|send|deploy|commit|create (?:a )?pull request)\b.*\b(repository|repo|file|store|database|customer|order|pull request|code|changes?)\b|\b(?:deploy|commit)\b.*\b(?:for me|the template|repository|repo|changes?)\b/i;
+const screenshotRequest = /\b(?:screenshots?|screen\s*captures?|screencasts?|ui debug(?:ging)?|image input|visual input|vision model)\b|\b(?:attached|pasted)\s+(?:[a-z0-9._-]+\s+)?(?:images?|pictures?|photos?|screens?|ui)\b|\b(?:this|that)\s+(?:images?|pictures?|photos?)\b|\bvisible (?:in|on) (?:this|that|the|my) (?:screens?|images?|pictures?|photos?|ui)\b|\b(?:inspect|analyze|analyse|examine|check|look at|view|read|describe|ocr|debug)\b[^?!;\n]{0,30}\b(?:this|that|the attached|the provided|attached|pasted)\s+(?:[a-z0-9._-]+\s+)?(?:images?|pictures?|photos?|screens?|ui)\b/i;
+const instructionalHowTo = /\b(?:how (?:(?:do|can|should|would|could) (?:i|we|you|one|users?|operators?|developers?)|to|is|are|does)|(?:please )?(?:explain|describe|show(?: me)?|tell me) (?:how|what|which|where|when)|steps? (?:to|for)|guide me (?:through|to)|(?:what|which)\b[^?!;\n]{0,40}\b(?:commands?|scripts?|flags?|options?|arguments?|steps?|ways?|workflows?|procedures?|docs?|documentation)\b|(?:what|which|where|when)\b[^?!;\n]{0,30}\b(?:(?:do|can|should|would|could) (?:i|we|one)|(?:i|we|one) (?:do|can|should|would|could|need to|have to|must))\b|(?:where|when) (?:is|are|does)\b)/i;
+const explicitDelegation = /\b(?:i need you to|go ahead and|(?:can|could|will|would) you) (?:please )?(?:perform|execute|run|edit|write|delete|send|deploy|commit|create)\b|,\s*(?:and\s+|then\s+|also\s+)?(?:please\s+)?(?:perform|execute|run|edit|write|delete|send|deploy|commit|create (?:a )?pull request)\b[^?!;\n]*\bfor me\b/i;
+const directAction = /\b(?:i need you to|go ahead and|perform|execute|run|edit|write|delete|send|deploy|commit|create (?:a )?pull request)\b.*\b(repository|repo|files?|store|database|customer|order|pull request|code|changes?)\b|\b(?:deploy|commit)\b.*\b(?:for me|the template|repository|repo|changes?)\b/i;
 const privateDataRequest = /\b(show|give|provide|list|find|retrieve|access|export|reveal|fetch)\b.{0,80}\b(private|customer data|owner information|private order|launch date)\b|\bprivate\b.{0,50}\bcustomer\b/i;
 const proceduralWords = /\b(install|run|open|configure|setup|set up|step|steps|pilot|command|admin)\b/i;
 const identityWords = /\b(site identity|identity|title|name)\b/i;
 
 function directMutation(question) {
-  return !instructionalHowTo.test(question) && directAction.test(question);
+  const clauses = question.split(/[?!;\n]+|\.(?=\s|$)/).map((part) => part.trim()).filter(Boolean);
+  return clauses.some((clause) =>
+    directAction.test(clause) && (explicitDelegation.test(clause) || !instructionalHowTo.test(clause)));
 }
 
 function terms(question) {

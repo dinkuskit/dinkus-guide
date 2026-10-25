@@ -9,7 +9,7 @@ const COMMIT = /^[a-f0-9]{40}$/;
 const REPOSITORY = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 const APPROVED_REPOSITORIES = new Set([
   "dinkuskit/dinkuskit", "dinkuskit/commerce", "dinkuskit/payments", "dinkuskit/ship",
-  "dinkuskit/template-store", "emdash-cms/emdash", "dinkuskit/blocks"
+  "dinkuskit/template-store", "emdash-cms/emdash"
 ]);
 
 export const root = path.resolve(fileURLToPath(new URL("..", import.meta.url)));

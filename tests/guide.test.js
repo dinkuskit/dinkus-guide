@@ -356,3 +356,116 @@ test("model ask reports missing corpus as exit code 3 before provider setup", as
     await rm(temporaryRoot, { recursive: true, force: true });
   }
 });
+
+test("informational command questions pass mutation guard while imperative actions refuse", async () => {
+  const commandCorpus = {
+    corpusHash: "command-corpus",
+    documents: [{
+      source: { id: "setup", provenance: "https://github.com/example/repo/blob/0123456789012345678901234567890123456789/README.md" },
+      lines: [
+        "# Template store setup",
+        "Run pnpm dev to start the template store dev server in the repository.",
+        "Deploy or run the template store with documented scripts and seed.json store migration steps.",
+        "Edit repository files in src/ to customize configuration."
+      ]
+    }]
+  };
+  const startStore = await answerQuestion("What command should I run to start the template store?", commandCorpus);
+  const startStoreModel = await answerQuestion("What command should I run to start the template store?", commandCorpus, {
+    mode: "model",
+    transport: async () => ({
+      model: "nemotron-3.5-super-vl",
+      text: JSON.stringify({ status: "answered", answer: "Run pnpm dev.", citationIds: ["E1"] })
+    })
+  });
+  const whichCommand = await answerQuestion("Which command runs the dev server in the repository?", commandCorpus);
+  const howDeploy = await answerQuestion("How can I deploy or run the template store?", commandCorpus);
+  const whereEdit = await answerQuestion("Where do I edit repository files?", commandCorpus);
+  const dottedFile = await answerQuestion("How do I use seed.json to run a store migration?", commandCorpus);
+  const directDelete = await answerQuestion("Go ahead and delete the store database.", commandCorpus);
+  const mixedImperative = await answerQuestion(
+    "What command should I run to start the template store? Edit repository files for me.",
+    commandCorpus
+  );
+
+  assert.equal(startStore.status, "answered");
+  assert.equal(startStoreModel.status, "answered");
+  assert.equal(whichCommand.status, "answered");
+  assert.equal(howDeploy.status, "answered");
+  assert.equal(whereEdit.status, "answered");
+  assert.equal(dottedFile.status, "answered");
+  assert.equal(directDelete.status, "insufficient_evidence");
+  assert.equal(mixedImperative.status, "insufficient_evidence");
+});
+
+test("text questions about screens, images, and visual features work while visual inspection abstains", async () => {
+  const uiDocsCorpus = {
+    corpusHash: "ui-docs-corpus",
+    documents: [{
+      source: { id: "ui-docs", provenance: "https://github.com/example/repo/blob/0123456789012345678901234567890123456789/README.md" },
+      lines: [
+        "# Admin and media guide",
+        "Edit page content in the admin screen and select Publish.",
+        "Upload a product image in the Media Library; EmDash serves each uploaded image by media ID.",
+        "EmDash includes inline visual editing and a visual schema builder."
+      ]
+    }]
+  };
+  const adminScreen = await answerQuestion("How do I edit page content in the admin screen?", uiDocsCorpus);
+  const adminScreenModel = await answerQuestion("How do I edit page content in the admin screen?", uiDocsCorpus, {
+    mode: "model",
+    transport: async () => ({
+      model: "nemotron-3.5-super-vl",
+      text: JSON.stringify({ status: "answered", answer: "Use the admin screen editor.", citationIds: ["E1"] })
+    })
+  });
+  const productImage = await answerQuestion("How do I upload a product image?", uiDocsCorpus);
+  const uploadedImage = await answerQuestion("How does EmDash serve an uploaded image?", uiDocsCorpus);
+  const visualBuilder = await answerQuestion("Does EmDash include inline visual editing and a visual schema builder?", uiDocsCorpus);
+  const inspectScreenshot = await answerQuestion("Inspect this screenshot and tell me whether the checkout button is visible.", uiDocsCorpus);
+  const inspectImage = await answerQuestion("Inspect this image and tell me whether the checkout button is visible.", uiDocsCorpus);
+  const attachedScreen = await answerQuestion("Look at the attached admin screen.", uiDocsCorpus);
+
+  assert.equal(adminScreen.status, "answered");
+  assert.equal(adminScreenModel.status, "answered");
+  assert.equal(productImage.status, "answered");
+  assert.equal(uploadedImage.status, "answered");
+  assert.equal(visualBuilder.status, "answered");
+  assert.equal(inspectScreenshot.status, "insufficient_evidence");
+  assert.match(inspectScreenshot.answer, /text-only/);
+  assert.equal(inspectImage.status, "insufficient_evidence");
+  assert.match(inspectImage.answer, /text-only/);
+  assert.equal(attachedScreen.status, "insufficient_evidence");
+  assert.match(attachedScreen.answer, /text-only/);
+});
+
+test("corpus verify normalizes filesystem ENOENT to exit code 3 when cache is missing", async () => {
+  const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "dinkus-guide-nocache-"));
+  try {
+    await mkdir(path.join(temporaryRoot, "bin"));
+    await mkdir(path.join(temporaryRoot, "src"));
+    await mkdir(path.join(temporaryRoot, "corpus"));
+    await copyFile(new URL("../bin/dinkus-guide", import.meta.url), path.join(temporaryRoot, "bin", "dinkus-guide"));
+    await copyFile(new URL("../src/guide.js", import.meta.url), path.join(temporaryRoot, "src", "guide.js"));
+    await copyFile(new URL("../src/corpus.js", import.meta.url), path.join(temporaryRoot, "src", "corpus.js"));
+    await copyFile(new URL("../corpus/manifest.json", import.meta.url), path.join(temporaryRoot, "corpus", "manifest.json"));
+
+    for (const extraArgs of [[], ["--mode", "model"]]) {
+      const result = await new Promise((resolve) => {
+        const child = spawn(process.execPath, [
+          path.join(temporaryRoot, "bin", "dinkus-guide"), "corpus", "verify", "--json", ...extraArgs
+        ], { cwd: temporaryRoot, env: { PATH: process.env.PATH } });
+        let stdout = "", stderr = "";
+        child.stdout.on("data", (chunk) => { stdout += chunk; });
+        child.stderr.on("data", (chunk) => { stderr += chunk; });
+        child.on("close", (code) => resolve({ code, stderr, value: JSON.parse(stdout) }));
+      });
+      assert.equal(result.code, 3);
+      assert.equal(result.stderr, "");
+      assert.equal(result.value.status, "error");
+      assert.match(result.value.error, /ENOENT/);
+    }
+  } finally {
+    await rm(temporaryRoot, { recursive: true, force: true });
+  }
+});

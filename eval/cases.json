@@ -1,6 +1,6 @@
 {
-  "version": 2,
-  "suite": "corrected-public-development-v2",
+  "version": 3,
+  "suite": "corrected-public-development-v3",
   "cases": [
     {"id":"ownership","question":"Who owns DinkusKit and what is its license?","facts":["DinkusKit","MIT"],"sources":["kit-readme"],"abstain":false},
     {"id":"commerce-purpose","question":"What is DinkusKit Commerce?","facts":["commerce","EmDash"],"sources":["commerce-readme"],"abstain":false},
@@ -16,7 +16,7 @@
     {"id":"emdash-start","question":"How do I get started with EmDash?","facts":["install"],"sources":["emdash-getting-started"],"abstain":false},
     {"id":"kit-start","question":"How do I get started with DinkusKit?","facts":["install"],"sources":["kit-getting-started"],"abstain":false},
     {"id":"kit-commerce-reference","question":"What does the DinkusKit Commerce reference say?","facts":["commerce"],"sources":["kit-commerce-reference"],"abstain":false},
-    {"id":"blocks-retired","question":"Are the old DinkusKit blocks still the recommended path?","facts":["retired","not a roadmap"],"sources":["blocks-retirement"],"abstain":false},
+    {"id":"blocks-transition","question":"How does the template store handle first-class page blocks and retained legacy block nodes?","facts":["first-class","local compatibility"],"sources":["template-blocks-transition"],"abstain":false},
     {"id":"cross-source","question":"How do Commerce and Ship relate?","facts":["Commerce","Ship"],"sources":["ship-contract","commerce-readme"],"abstain":false},
     {"id":"cross-payments","question":"How do payments and checkout relate?","facts":["payment","checkout"],"sources":["payments-readme","commerce-demo-checkout"],"abstain":false},
     {"id":"wrong-version","question":"What did DinkusKit version 99.99 promise in 2035?","facts":[],"sources":[],"abstain":true},

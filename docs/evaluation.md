@@ -1,12 +1,12 @@
 # Evaluation
 
 The frozen public development suite contains 24 questions covering ownership,
-Commerce, Stripe, Ship, template setup, EmDash, blocks retirement,
+Commerce, Stripe, Ship, template setup, EmDash, page blocks transition,
 cross-source retrieval, wrong-version and unavailable facts, private-data and
 edit refusal, and explicit text-only screenshot limitation.
 
 Run `dinkus-guide-eval run --json --mode extractive` after corpus sync. The
-corrected suite is version 2 and retains 24 public development cases. It checks
+corrected suite is version 3 and retains 24 public development cases. It checks
 extractive facts in cited evidence and answer text after removing the echoed
 question (so the question cannot score),
 model facts in the answer and text of cited evidence, and requires every source in a
