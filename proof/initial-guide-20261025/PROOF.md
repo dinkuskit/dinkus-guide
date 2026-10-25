@@ -1,7 +1,7 @@
 # DinkusGuide v1 proof
 
-Implementation tested locally: `31749240e6d34a4b2285eefe35e6eee13f058d97`.
-Actual model run source: `cb4e9be43466fca0ccb1fa45fdb951e7abd1930d` and `a0a435ed1fc1c6a07f838451455e7c10b4253937` (all 24 `v3` retrieval windows and model prompts are byte-for-byte identical in `3174924`; `src/` is unchanged from `f602d6a`).
+Implementation tested locally: `e08b1cccf84ac0306d630a2c10fd5ebadd118414`.
+Actual model run source: `cb4e9be43466fca0ccb1fa45fdb951e7abd1930d` and `a0a435ed1fc1c6a07f838451455e7c10b4253937` (all 24 `v3` retrieval windows and model prompts are byte-for-byte identical in `e08b1cc`).
 Base: `ca39eb7500b8c8f57526385700244e7cb9cbc4ae`.
 PR: https://github.com/dinkuskit/dinkus-guide/pull/1
 
@@ -15,7 +15,7 @@ No private archives, store access, deployment, or training are included.
 
 ## Reproducible checks
 
-- `npm test`: 38/38 pass.
+- `npm test`: 39/39 pass.
 - `npm run verify`: pass; 15 pinned public documents.
 - `node bin/dinkus-guide corpus verify --json`: pass.
 - `node bin/dinkus-guide-eval run --json --mode extractive`: 23/24 (95.8%).
@@ -96,6 +96,11 @@ historical, superseded by this proof. No holdout has been used for optimization.
   fixed in `3174924` (resolving symlinks before checking the evaluator entry
   point and reporting rejected pre-request provider configurations as
   `unavailable` rather than zero-score model runs; `src/` unchanged).
+- [Round 8](REVIEW_8.md) (`9e3670c`): one P2 finding in `src/guide.js` fixed in
+  `e08b1cc` (normalizing `v`-prefixed and explicit major version references with
+  exact token boundaries before retrieval so unsupported `v`-prefixed or
+  substring versions abstain cleanly; all 24 `v3` retrieval windows and model
+  prompts remained byte-for-byte unchanged).
 
 ## Review state
 
