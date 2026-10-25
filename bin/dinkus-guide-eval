@@ -1,0 +1,76 @@
+#!/usr/bin/env node
+import { readFile } from "node:fs/promises";
+import { spawn } from "node:child_process";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const args = process.argv.slice(2);
+const json = args.includes("--json");
+const modeAt = args.indexOf("--mode");
+const mode = modeAt >= 0 ? args[modeAt + 1] : "extractive";
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const cli = path.join(root, "bin", "dinkus-guide");
+
+function runCli(cliArgs) {
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, [cli, ...cliArgs], { cwd: root, env: process.env });
+    let stdout = "", stderr = "";
+    child.stdout.on("data", (chunk) => { stdout += chunk; });
+    child.stderr.on("data", (chunk) => { stderr += chunk; });
+    child.on("close", (code) => {
+      let value;
+      try { value = JSON.parse(stdout); } catch { value = { status: "error", error: "invalid CLI JSON" }; }
+      resolve({ code, value, stderr: stderr.trim() });
+    });
+  });
+}
+function runGuide(question) {
+  return runCli(["ask", question, "--json", "--mode", mode]);
+}
+
+if (args.includes("--help") || args[0] !== "run") {
+  console.log("Usage: dinkus-guide-eval run [--json] [--mode extractive|model]");
+  process.exit(args.includes("--help") ? 0 : 2);
+}
+if (!["extractive", "model"].includes(mode)) {
+  console.error("mode must be extractive or model");
+  process.exit(2);
+}
+const suite = JSON.parse(await readFile(path.join(root, "eval", "cases.json"), "utf8"));
+const corpusRun = await runCli(["corpus", "verify", "--json"]);
+const results = [];
+for (const test of suite.cases) {
+  const run = await runGuide(test.question);
+  const text = JSON.stringify(run.value).toLowerCase();
+  const facts = test.facts.filter((fact) => text.includes(fact.toLowerCase()));
+  const cited = [...new Set((run.value.citations ?? []).map((citation) => citation.sourceId))];
+  const requiredSources = test.sources.filter((source) => cited.includes(source));
+  const citationPass = test.abstain ? cited.length === 0 : requiredSources.length > 0;
+  const abstentionPass = test.abstain ? run.value.status === "insufficient_evidence" : run.value.status === "answered";
+  results.push({
+    id: test.id,
+    status: run.value.status ?? "error",
+    factsMatched: facts.length,
+    factsRequired: test.facts.length,
+    citationsMatched: requiredSources.length,
+    citationsRequired: test.abstain ? 0 : 1,
+    abstentionPass,
+    citationPass,
+    pass: facts.length === test.facts.length && citationPass && abstentionPass,
+    exitCode: run.code
+  });
+}
+const passed = results.filter((result) => result.pass).length;
+const report = {
+  suite: suite.suite,
+  mode,
+  modelIdentity: mode === "model" ? (process.env.DINKUS_GUIDE_MODEL || "nemotron-3.5-super-vl") : null,
+  corpusHash: corpusRun.value.corpusHash ?? null,
+  total: results.length,
+  passed,
+  score: passed / results.length,
+  results
+};
+if (json) console.log(JSON.stringify(report));
+else console.log(`${passed}/${results.length} passed (${(report.score * 100).toFixed(1)}%) in ${mode} mode`);
+process.exit(passed === results.length ? 0 : 1);

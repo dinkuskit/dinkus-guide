@@ -1,0 +1,19 @@
+name: verify
+on:
+  push:
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.22.0
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm test
+      - run: npm run verify

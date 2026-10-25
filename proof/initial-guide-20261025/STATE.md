@@ -9,7 +9,8 @@
 - Mode: mutate source and isolated local tests
 - Scope: read-only Guide, evaluator, measured baseline, deferred Harness² plan
 - Gate: human merge/deploy; no private knowledge or credential provisioning
-- Next: named implementation worker, then independent proof and exact-head review
+- Next: coordinator owns push/PR/review; implementation commit is ready for
+  independent proof and exact-head review
 
 Success requires a usable CLI and honest source-backed baseline, no runtime
 deployment. Public GitHub repository was explicitly requested and created with

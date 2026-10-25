@@ -1,0 +1,18 @@
+{
+  "name": "@dinkuskit/dinkus-guide",
+  "version": "1.0.0",
+  "description": "Read-only, source-backed DinkusKit and EmDash guide",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=24"
+  },
+  "bin": {
+    "dinkus-guide": "./bin/dinkus-guide",
+    "dinkus-guide-eval": "./bin/dinkus-guide-eval"
+  },
+  "scripts": {
+    "test": "node --test",
+    "verify": "node ./src/verify-project.js"
+  }
+}
