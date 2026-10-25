@@ -21,3 +21,11 @@ test("sync rejects content with a wrong hash", async () => {
     /sha256 mismatch/
   );
 });
+
+test("sync enforces the bounded download before hashing", async () => {
+  const oversized = new Uint8Array(1_000_001);
+  await assert.rejects(
+    syncCorpus({ fetchImpl: async () => new Response(oversized) }),
+    /exceeds 1000000 bytes/
+  );
+});

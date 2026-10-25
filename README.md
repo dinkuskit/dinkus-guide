@@ -21,7 +21,7 @@ npm run verify
 Extractive mode returns ranked passages and immutable line citations. Model mode
 is bounded and action-free; see [docs/cli.md](docs/cli.md). The `lightning`
 model alias is retired; the default model identity is
-`nemotron-3.5-super-vl`.
+`nemotron-3.5-super-vl` (or the corrected `nemotron-3.5-lightning` alias).
 
 See [docs/architecture.md](docs/architecture.md) and
 [docs/evaluation.md](docs/evaluation.md) for boundaries and baseline rules.

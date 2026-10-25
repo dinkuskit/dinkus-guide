@@ -1,40 +1,53 @@
-# Initial Guide proof
+# DinkusGuide repair proof
 
-In progress. Source base: ca39eb7500b8c8f57526385700244e7cb9cbc4ae.
+Repair base: `5dc17f39d922a86ef56acdf27d7cf83265a132b9`.
 
-The owner approved creation of dinkuskit/dinkus-guide, a read-only Guide with a
-separate evaluation runner, baseline-first development, and a scoped but deferred
-Harness² experiment. This record must distinguish real source retrieval,
-synthetic provider tests, and any real model call. It is not deployment evidence.
+## Preserved history
 
-## Initial preparation
+The original v1 extractive result was 20/24 (83.3%), using a flawed scorer that
+searched `JSON.stringify` of the entire result. It remains history only and is
+superseded by corrected suite/scorer version 2. The original model 0/24 result
+was provider-unavailable evidence, not live-model quality.
 
-- New public repository created under the requested DinkusKit organization.
-- Isolated implementation worktree/branch created from its initial README commit.
-- Compared a Python stdlib design and a Node 24 native ESM design; selected Node
-  without runtime dependencies for DinkusKit integration and small surface area.
-- Credentials absent from the current process; no secret files opened. Existing
-  Spark consumer contracts are being checked before claiming live-model access.
+## Repair and results
 
-## Implementation and baseline
+- Direct mutations/private-data extraction are refused while read-only how-to
+  questions and public customer concepts remain answerable.
+- Retrieval requires substantive exact topical terms, uses heading-aware bounded
+  passages, and suppresses redundant overlap. Unsupported-version and no-evidence
+  checks are shared by extractive and provider modes.
+- Model output validates source spans without trusting model URLs; the Guide
+  constructs authoritative URLs, requires citations for answered output and none
+  for insufficient evidence, and rejects forged spans, empty answers and tools.
+  Requested and actual returned model identities are separate.
+- HTTP has timeout, `max_tokens`, bounded response bytes, redirect refusal,
+  credential-free HTTPS (or loopback HTTP), path-preserving v1 append, and an
+  optional local Super VL no-think control.
+- Sync validates approved public repositories, cache containment and symlinks,
+  bounded downloads, timeout, and atomic verified writes.
 
-- Implemented Node 24 native ESM Guide and separate CLI-spawning evaluator with
-  no runtime dependencies, 15 pinned MIT public Markdown sources, SHA-256
-  manifest validation, redirect/path/size/symlink checks and ignored cache.
-- Verification: `npm test` passed 12/12; `npm run verify` passed; corpus sync and
-  verify passed for corpus hash
-  `377d1157e8448dd28d1dd9d834ac3be6608ddb45c162b516f8be61b010571346`.
-- Extractive public development baseline: 20/24 (83.3%). Four misses are
-  retrieval/citation or rubric gaps: ownership and docs/reference questions
-  surfaced relevant facts without the expected source ID, the EmDash-start
-  fact was absent from the bounded passages, and the example question did not
-  match its expected citation. No case-specific answer table was added.
-- Model-mode baseline: 0/24 because no model credentials/configuration were
-  present. This is provider-unavailable evidence, not live-model quality.
-- Three asks were exercised: template setup answered with pinned citations,
-  Stripe test mode answered with pinned citations, and screenshot/edit request
-  returned explicit text-only/read-only insufficient evidence.
-- Synthetic tests cover malformed/wrong-hash and redirect source responses,
-  source instruction injection, missing/invalid citations, provider failures,
-  tool output, retired model alias, and no-write ask behavior. No live model was
-  invoked.
+Corrected public suite: `corrected-public-development-v2` version 2, 24 cases.
+Extractive result: 19/24 (79.2%), corpus hash
+`377d1157e8448dd28d1dd9d834ac3be6608ddb45c162b516f8be61b010571346`.
+Misses: `ownership`, `commerce-docs`, `template`, `emdash-start`, `webhook`.
+These remain visible; expected facts were not changed to raise the score.
+
+Model evaluation with no configured provider reports `unavailable` and
+`score: null`, not zero model quality. No live model, secret, private source,
+deployment, push, or PR was used; the parent must run the approved Super VL
+consumer separately.
+
+## Verification
+
+- `npm test`: 17/17 passed.
+- `npm run verify`: passed.
+- `dinkus-guide corpus sync --json`: passed, 15 sources, corpus hash above.
+- `dinkus-guide corpus verify --json`: passed.
+- Samples: template-color how-to answered; quantum teleportation insufficient;
+  Stripe webhook answered with pinned evidence; screenshot request explicitly
+  text-only/insufficient.
+- CLI unknown `--bogus`: exit 2.
+
+Limitations remain: extractive answers are passage-oriented, five public cases
+still miss, and screenshot/video inspection is explicitly unavailable. The
+24-case suite remains text-only.

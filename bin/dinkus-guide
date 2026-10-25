@@ -2,22 +2,35 @@
 import { answerQuestion, createOpenAICompatibleTransport } from "../src/guide.js";
 import { syncCorpus, verifyCorpus } from "../src/corpus.js";
 
-const VERSION = "1.0.0";
+const VERSION = "1.0.1";
 const args = process.argv.slice(2);
-const json = args.includes("--json");
-const modeAt = args.indexOf("--mode");
-const mode = modeAt >= 0 ? args[modeAt + 1] : "extractive";
-const positional = args.filter((arg, index) => arg !== "--json" && !(modeAt >= 0 && (index === modeAt || index === modeAt + 1)));
+
+function parseArgs() {
+  const allowed = new Set(["--json", "--help", "--version", "--mode"]);
+  const values = { json: false, mode: "extractive", modeSet: false, positional: [] };
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg.startsWith("-") && !allowed.has(arg)) throw Object.assign(new Error(`unknown option: ${arg}`), { code: 2 });
+    if (arg === "--json") { if (values.json) throw Object.assign(new Error("duplicate --json"), { code: 2 }); values.json = true; continue; }
+    if (arg === "--help" || arg === "--version") { values[arg.slice(2)] = true; continue; }
+    if (arg === "--mode") {
+      if (values.modeSet || index + 1 >= args.length || args[index + 1].startsWith("-")) throw Object.assign(new Error("missing or duplicate --mode"), { code: 2 });
+      values.modeSet = true;
+      values.mode = args[++index]; continue;
+    }
+    values.positional.push(arg);
+  }
+  return values;
+}
 
 function help() {
   console.log(`DinkusGuide ${VERSION}
 Usage:
   dinkus-guide corpus sync|verify [--json]
-  dinkus-guide ask QUESTION [--json] [--mode extractive|model]
-Exit codes: 0 success, 2 usage, 3 corpus unavailable/invalid, 4 model unavailable/invalid.`);
+  dinkus-guide ask QUESTION [--json] [--mode extractive|model]`);
 }
 
-function output(value) {
+function output(value, json) {
   if (json) console.log(JSON.stringify(value));
   else {
     console.log(value.answer ?? `${value.status}: ${value.corpusHash ?? ""}`);
@@ -25,31 +38,31 @@ function output(value) {
   }
 }
 
+let parsed;
 try {
-  if (args.includes("--help") || args.length === 0) { help(); process.exit(0); }
-  if (args.includes("--version")) { console.log(VERSION); process.exit(0); }
-  if (modeAt >= 0 && !["extractive", "model"].includes(mode)) throw Object.assign(new Error("mode must be extractive or model"), { code: 2 });
+  parsed = parseArgs();
+  if (parsed.help || !args.length) { help(); process.exit(0); }
+  if (parsed.version) { console.log(VERSION); process.exit(0); }
+  if (!["extractive", "model"].includes(parsed.mode)) throw Object.assign(new Error("mode must be extractive or model"), { code: 2 });
+  const positional = parsed.positional;
   if (positional[0] === "corpus" && ["sync", "verify"].includes(positional[1])) {
     if (positional.length !== 2) throw Object.assign(new Error("unexpected corpus arguments"), { code: 2 });
     const result = positional[1] === "sync" ? await syncCorpus() : await verifyCorpus();
-    output({ status: "verified", corpusHash: result.corpusHash, sources: result.manifest.sources.length });
+    output({ status: "verified", corpusHash: result.corpusHash, sources: result.manifest.sources.length }, parsed.json);
     process.exit(0);
   }
   if (positional[0] !== "ask" || positional.length < 2) throw Object.assign(new Error("expected ask QUESTION or corpus sync|verify"), { code: 2 });
-  const question = positional.slice(1).join(" ");
   const corpus = await verifyCorpus();
-  let transport;
-  if (mode === "model") {
-    transport = createOpenAICompatibleTransport({
-      baseUrl: process.env.DINKUS_GUIDE_BASE_URL,
-      model: process.env.DINKUS_GUIDE_MODEL || "nemotron-3.5-super-vl",
-      apiKey: process.env.DINKUS_GUIDE_API_KEY
-    });
-  }
-  output(await answerQuestion(question, corpus, { mode, transport }));
+  const transport = parsed.mode === "model" ? createOpenAICompatibleTransport({
+    baseUrl: process.env.DINKUS_GUIDE_BASE_URL,
+    model: process.env.DINKUS_GUIDE_MODEL || "nemotron-3.5-super-vl",
+    apiKey: process.env.DINKUS_GUIDE_API_KEY,
+    noThink: process.env.DINKUS_GUIDE_NO_THINK === "1"
+  }) : undefined;
+  output(await answerQuestion(positional.slice(1).join(" "), corpus, { mode: parsed.mode, transport }), parsed.json);
 } catch (error) {
-  const code = error.code ?? (mode === "model" ? 4 : 3);
-  if (json) console.log(JSON.stringify({ status: "error", error: error.message }));
+  const code = error.code ?? (parsed?.mode === "model" ? 4 : 3);
+  if (parsed?.json) console.log(JSON.stringify({ status: "error", error: error.message }));
   else console.error(`dinkus-guide: ${error.message}`);
   process.exit(code);
 }
