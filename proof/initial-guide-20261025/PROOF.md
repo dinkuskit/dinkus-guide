@@ -1,7 +1,7 @@
 # DinkusGuide v1 proof
 
-Implementation tested locally: `cb4e9be43466fca0ccb1fa45fdb951e7abd1930d`.
-Actual model run source: `cb4e9be43466fca0ccb1fa45fdb951e7abd1930d` (exact-head rerun) and `a0a435ed1fc1c6a07f838451455e7c10b4253937` (initial `v3` run).
+Implementation tested locally: `19eaf171d3a6acbbe86f5164626573b40e336b3f`.
+Actual model run source: `cb4e9be43466fca0ccb1fa45fdb951e7abd1930d` (exact `src/` rerun) and `a0a435ed1fc1c6a07f838451455e7c10b4253937` (initial `v3` run).
 Base: `ca39eb7500b8c8f57526385700244e7cb9cbc4ae`.
 PR: https://github.com/dinkuskit/dinkus-guide/pull/1
 
@@ -15,14 +15,14 @@ No private archives, store access, deployment, or training are included.
 
 ## Reproducible checks
 
-- `npm test`: 36/36 pass.
+- `npm test`: 37/37 pass.
 - `npm run verify`: pass; 15 pinned public documents.
 - `node bin/dinkus-guide corpus verify --json`: pass.
 - `node bin/dinkus-guide-eval run --json --mode extractive`: 23/24 (95.8%).
 - `node bin/dinkus-guide-eval run --json --mode model`: actual local
-  `nemotron-3.5-super-vl`, 17/24 (70.8%) on `cb4e9be` ([exact-head rerun](MODEL_RERUN_V3.json))
+  `nemotron-3.5-super-vl`, 17/24 (70.8%) on `cb4e9be` ([exact-src rerun](MODEL_RERUN_V3.json))
   and 20/24 (83.3%) on `a0a435e` ([initial v3 run](MODEL_BASELINE_V3.json)), with
-  identical prompts and corpus.
+  identical prompts, corpus, and `src/` implementation.
 
 All `v3` evaluations use `corrected-public-development-v3`, version 3, and
 corpus hash `e2ec499d5c054e3e4a3bbbc30d8aa4f387f7c5a189a794022c3e5ce362d5bda4`.
@@ -83,6 +83,10 @@ historical, superseded by this proof. No holdout has been used for optimization.
 - [Round 4](REVIEW_4.md) (`c9761d9`): one P3 finding fixed in `cb4e9be`
   (rejecting missing/blank provider `model` responses rather than falling back to
   `requestedModel`, keeping returned `modelIdentity` distinct from configuration).
+- [Round 5](REVIEW_5.md) (`4828447`): one P3 finding fixed in `19eaf17`
+  (preserving `--json` stdout error formatting across CLI argument-parsing
+  failures in `dinkus-guide` and `dinkus-guide-eval`; `src/` and extractive
+  outputs unchanged).
 
 ## Review state
 
