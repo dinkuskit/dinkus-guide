@@ -52,7 +52,12 @@ try {
     process.exit(0);
   }
   if (positional[0] !== "ask" || positional.length < 2) throw Object.assign(new Error("expected ask QUESTION or corpus sync|verify"), { code: 2 });
-  const corpus = await verifyCorpus();
+  let corpus;
+  try {
+    corpus = await verifyCorpus();
+  } catch (error) {
+    throw Object.assign(error, { code: 3 });
+  }
   const transport = parsed.mode === "model" ? createOpenAICompatibleTransport({
     baseUrl: process.env.DINKUS_GUIDE_BASE_URL,
     model: process.env.DINKUS_GUIDE_MODEL || "nemotron-3.5-super-vl",

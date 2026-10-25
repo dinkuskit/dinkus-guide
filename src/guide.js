@@ -2,7 +2,7 @@ import { citationFor } from "./corpus.js";
 
 const STOP = new Set("a an and are as at be can do explain for from give how i in is it me of on or please set tell the to treat up what when where which with you dinkuskit documented example setting".split(" "));
 const screenshotRequest = /\b(screenshot|screen|image|vision|ui debug|visual)\b/i;
-const instructionalHowTo = /\b(?:how (?:do|can) i|please explain how|explain how|steps? (?:to|for)|guide me (?:through|to))\b/i;
+const instructionalHowTo = /\b(?:how (?:do|can) i|how to|please explain how|explain how|steps? (?:to|for)|guide me (?:through|to))\b/i;
 const directAction = /\b(?:i need you to|go ahead and|perform|execute|run|edit|write|delete|send|deploy|commit|create (?:a )?pull request)\b.*\b(repository|repo|file|store|database|customer|order|pull request|code|changes?)\b|\b(?:deploy|commit)\b.*\b(?:for me|the template|repository|repo|changes?)\b/i;
 const privateDataRequest = /\b(show|give|provide|list|find|retrieve|access|export|reveal|fetch)\b.{0,80}\b(private|customer data|owner information|private order|launch date)\b|\bprivate\b.{0,50}\bcustomer\b/i;
 const proceduralWords = /\b(install|run|open|configure|setup|set up|step|steps|pilot|command|admin)\b/i;
@@ -13,7 +13,8 @@ function directMutation(question) {
 }
 
 function terms(question) {
-  return [...new Set(question.toLowerCase().replace(/[^a-z0-9]+/g, " ").split(" ").filter((word) => word.length > 2 && !STOP.has(word)))];
+  const words = [...new Set(question.toLowerCase().replace(/[^a-z0-9]+/g, " ").split(" ").filter((word) => word.length > 2 && !STOP.has(word)))];
+  return words.length || !/\bdinkuskit\b/i.test(question) ? words : ["dinkuskit"];
 }
 function containsTerm(text, term) {
   return new RegExp(`(?:^|[^a-z0-9])${term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:$|[^a-z0-9])`, "i").test(text);
@@ -192,7 +193,7 @@ export function createOpenAICompatibleTransport({ fetchImpl = fetch, baseUrl, mo
   let endpoint;
   try {
     const base = new URL(baseUrl);
-    const loopback = ["localhost", "127.0.0.1", "::1"].includes(base.hostname);
+    const loopback = ["localhost", "127.0.0.1", "[::1]"].includes(base.hostname);
     if ((base.protocol !== "https:" && !(base.protocol === "http:" && loopback)) ||
         base.username || base.password || base.search || base.hash) throw new Error("model base URL must be credential-free HTTPS (or loopback HTTP)");
     const pathname = base.pathname.replace(/\/+$/, "");

@@ -1,4 +1,8 @@
 import assert from "node:assert/strict";
+import { copyFile, mkdtemp, mkdir, rm } from "node:fs/promises";
+import { spawn } from "node:child_process";
+import os from "node:os";
+import path from "node:path";
 import { test } from "node:test";
 import { answerQuestion, createOpenAICompatibleTransport, rankEvidence, validateEvidenceIds } from "../src/guide.js";
 import { validateCitation } from "../src/corpus.js";
@@ -47,6 +51,33 @@ test("unrelated topical questions do not retrieve brand-only snippets", async ()
   const result = await answerQuestion("Explain quantum teleportation in DinkusKit", corpus);
   assert.equal(result.status, "insufficient_evidence");
   assert.deepEqual(result.citations, []);
+});
+
+test("product-only overview questions retain product retrieval", async () => {
+  const overviewCorpus = {
+    corpusHash: "overview-corpus",
+    documents: [{
+      source: { id: "kit-readme", provenance: "https://github.com/example/repo/blob/0123456789012345678901234567890123456789/README.md" },
+      lines: ["# DinkusKit", "DinkusKit is a public source-backed guide."]
+    }]
+  };
+  const result = await answerQuestion("What is DinkusKit?", overviewCorpus);
+  assert.equal(result.status, "answered");
+  assert.equal(result.citations[0].sourceId, "kit-readme");
+});
+
+test("plain how-to wording is instructional while direct actions still refuse", async () => {
+  const repositoryCorpus = {
+    corpusHash: "repository-corpus",
+    documents: [{
+      source: { id: "repository", provenance: "https://github.com/example/repo/blob/0123456789012345678901234567890123456789/README.md" },
+      lines: ["# Repository files", "Repository files are documented here."]
+    }]
+  };
+  const howTo = await answerQuestion("How to edit repository files?", repositoryCorpus);
+  const direct = await answerQuestion("Edit repository files for me.", repositoryCorpus);
+  assert.equal(howTo.status, "answered");
+  assert.equal(direct.status, "insufficient_evidence");
 });
 
 test("procedure retrieval keeps adjacent numbered steps in one cited span", async () => {
@@ -221,6 +252,24 @@ test("provider transport constructs root, v1, and prefixed v1 endpoints", async 
   ]);
 });
 
+test("provider transport permits IPv6 loopback HTTP only", async () => {
+  let requestUrl;
+  const transport = createOpenAICompatibleTransport({
+    baseUrl: "http://[::1]:8787",
+    model: "nemotron-3.5-super-vl",
+    apiKey: "secret",
+    fetchImpl: async (url) => {
+      requestUrl = url;
+      return new Response(JSON.stringify({ model: "actual", choices: [{ message: { content: "ok" } }] }));
+    }
+  });
+  await transport({ prompt: "x" });
+  assert.equal(requestUrl, "http://[::1]:8787/v1/chat/completions");
+  assert.throws(() => createOpenAICompatibleTransport({
+    baseUrl: "http://[2001:db8::1]", model: "x", apiKey: "y"
+  }), /credential-free HTTPS/);
+});
+
 test("provider transport preserves base paths and bounds request policy", async () => {
   let request;
   const transport = createOpenAICompatibleTransport({
@@ -282,4 +331,28 @@ test("evaluator only searches facts in exactly cited evidence windows", () => {
 test("ask does not write to disk", async () => {
   const result = await answerQuestion("setup", corpus);
   assert.equal(result.corpusHash, "test-corpus");
+});
+
+test("model ask reports missing corpus as exit code 3 before provider setup", async () => {
+  const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "dinkus-guide-cli "));
+  try {
+    await mkdir(path.join(temporaryRoot, "bin"));
+    await mkdir(path.join(temporaryRoot, "src"));
+    await copyFile(new URL("../bin/dinkus-guide", import.meta.url), path.join(temporaryRoot, "bin", "dinkus-guide"));
+    await copyFile(new URL("../src/guide.js", import.meta.url), path.join(temporaryRoot, "src", "guide.js"));
+    await copyFile(new URL("../src/corpus.js", import.meta.url), path.join(temporaryRoot, "src", "corpus.js"));
+    const result = await new Promise((resolve) => {
+      const child = spawn(process.execPath, [
+        path.join(temporaryRoot, "bin", "dinkus-guide"), "ask", "setup", "--json", "--mode", "model"
+      ], { cwd: temporaryRoot, env: { PATH: process.env.PATH } });
+      let stdout = "";
+      child.stdout.on("data", (chunk) => stdout += chunk);
+      child.on("close", (code) => resolve({ code, value: JSON.parse(stdout) }));
+    });
+    assert.equal(result.code, 3);
+    assert.equal(result.value.status, "error");
+    assert.match(result.value.error, /manifest is not valid JSON/);
+  } finally {
+    await rm(temporaryRoot, { recursive: true, force: true });
+  }
 });
