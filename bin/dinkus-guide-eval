@@ -1,12 +1,24 @@
 #!/usr/bin/env node
+import { realpathSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import path from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 
 const args = process.argv.slice(2);
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const selfPath = realpathSync(fileURLToPath(import.meta.url));
+const root = path.resolve(path.dirname(selfPath), "..");
 const cli = path.join(root, "bin", "dinkus-guide");
+const providerUnavailableError = /^(?:model mode requires configured provider|DINKUS_GUIDE_BASE_URL, MODEL, and API_KEY are required|the model alias is retired; use nemotron-3\.5-super-vl|model base URL must be credential-free HTTPS \(or loopback HTTP\)|invalid model base URL|model provider request failed|model provider unavailable \(HTTP \d+\))$/;
+
+function isMainModule() {
+  if (!process.argv[1]) return false;
+  try {
+    return selfPath === realpathSync(path.resolve(process.argv[1]));
+  } catch {
+    return false;
+  }
+}
 
 function parseArgs() {
   const values = { json: false, mode: "extractive", modeSet: false, command: null };
@@ -47,7 +59,7 @@ export function evidenceForCitations(evidence, citations) {
     citation.endLine === item.endLine));
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (isMainModule()) {
 const jsonOutput = args.includes("--json");
 const failUsage = (message) => {
   if (jsonOutput) console.log(JSON.stringify({ status: "error", error: message }));
@@ -56,10 +68,11 @@ const failUsage = (message) => {
 };
 let options;
 try { options = parseArgs(); } catch (error) { failUsage(error.message); }
-if (options.command === null) {
+if (!args.length) {
   console.log("Usage: dinkus-guide-eval run [--json] [--mode extractive|model]");
   process.exit(0);
 }
+if (options.command === null) failUsage("expected command: run");
 if (options.command !== "run") failUsage(`unexpected command: ${options.command}`);
 if (!["extractive", "model"].includes(options.mode)) failUsage("mode must be extractive or model");
 
@@ -78,7 +91,7 @@ for (const test of suite.cases) {
   const run = await runGuide(test.question, options.mode);
   const value = run.value;
   if (value.modelIdentity) modelIdentities.add(value.modelIdentity);
-  if (options.mode === "model" && run.code === 4 && /configured provider|provider unavailable|request failed|required|invalid model base URL/i.test(value.error || "")) {
+  if (options.mode === "model" && run.code === 4 && providerUnavailableError.test(value.error || "")) {
     const report = { suite: suite.suite, suiteVersion: suite.version, mode: options.mode, availability: "unavailable",
       reason: value.error, total: suite.cases.length, passed: 0, score: null, results: [] };
     console.log(options.json ? JSON.stringify(report) : `unavailable: ${report.reason}`);

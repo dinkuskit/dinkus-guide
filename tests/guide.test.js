@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { copyFile, mkdtemp, mkdir, rm } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { copyFile, mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
@@ -516,6 +517,7 @@ test("CLI argument-parsing failures preserve JSON error output on stdout", async
     [guideCli, ["ask", "setup", "--bogus", "--json"], /unknown option: --bogus/],
     [guideCli, ["ask", "setup", "--json", "--json"], /duplicate --json/],
     [guideCli, ["ask", "setup", "--mode", "--json"], /missing or duplicate --mode/],
+    [evalCli, ["--json"], /expected command: run/],
     [evalCli, ["run", "--json", "--bogus"], /unknown option: --bogus/],
     [evalCli, ["run", "--json", "--mode", "invalid"], /mode must be extractive or model/]
   ];
@@ -531,5 +533,105 @@ test("CLI argument-parsing failures preserve JSON error output on stdout", async
     assert.equal(result.stderr, "");
     assert.equal(result.value.status, "error");
     assert.match(result.value.error, expectedError);
+  }
+});
+
+test("symlinked evaluator runs suite and reports rejected provider settings as unavailable", async () => {
+  const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "dinkus-guide-eval-pkg-"));
+  const linkDir = await mkdtemp(path.join(os.tmpdir(), "dinkus-guide-eval-bin-"));
+  try {
+    await mkdir(path.join(temporaryRoot, "bin"));
+    await mkdir(path.join(temporaryRoot, "src"));
+    await mkdir(path.join(temporaryRoot, "corpus"));
+    await mkdir(path.join(temporaryRoot, "eval"));
+    await mkdir(path.join(temporaryRoot, ".cache", "dinkus-guide", "sources"), { recursive: true });
+    await copyFile(new URL("../bin/dinkus-guide", import.meta.url), path.join(temporaryRoot, "bin", "dinkus-guide"));
+    await copyFile(new URL("../bin/dinkus-guide-eval", import.meta.url), path.join(temporaryRoot, "bin", "dinkus-guide-eval"));
+    await copyFile(new URL("../src/guide.js", import.meta.url), path.join(temporaryRoot, "src", "guide.js"));
+    await copyFile(new URL("../src/corpus.js", import.meta.url), path.join(temporaryRoot, "src", "corpus.js"));
+
+    const commit = "0123456789012345678901234567890123456789";
+    const sources = [];
+    for (let index = 1; index <= 10; index += 1) {
+      const id = `doc-${index}`;
+      const content = `# Template store setup ${index}\nRun pnpm dev to start the template store.\n`;
+      const sha256 = createHash("sha256").update(content).digest("hex");
+      sources.push({
+        id,
+        repository: "dinkuskit/template-store",
+        commit,
+        path: `docs/${id}.md`,
+        sha256,
+        license: "MIT",
+        provenance: `https://github.com/dinkuskit/template-store/blob/${commit}/docs/${id}.md`
+      });
+      await writeFile(path.join(temporaryRoot, ".cache", "dinkus-guide", "sources", `${id}.md`), content, "utf8");
+    }
+    await writeFile(path.join(temporaryRoot, "corpus", "manifest.json"), JSON.stringify({ version: 1, sources }));
+    await writeFile(path.join(temporaryRoot, "eval", "cases.json"), JSON.stringify({
+      version: 3,
+      suite: "symlink-fixture",
+      cases: [{
+        id: "template-setup",
+        question: "How do I start the template store?",
+        abstain: false,
+        facts: ["pnpm dev"],
+        sources: ["doc-1"]
+      }]
+    }));
+
+    const linkedEval = path.join(linkDir, "dinkus-guide-eval");
+    await symlink(path.join(temporaryRoot, "bin", "dinkus-guide-eval"), linkedEval);
+
+    const runEval = (cliArgs, extraEnv = {}) => new Promise((resolve) => {
+      const child = spawn(process.execPath, [linkedEval, ...cliArgs], {
+        cwd: linkDir,
+        env: { PATH: process.env.PATH, ...extraEnv }
+      });
+      let stdout = "", stderr = "";
+      child.stdout.on("data", (chunk) => { stdout += chunk; });
+      child.stderr.on("data", (chunk) => { stderr += chunk; });
+      child.on("close", (code) => resolve({ code, stderr, stdout, value: stdout ? JSON.parse(stdout) : null }));
+    });
+
+    const extractive = await runEval(["run", "--json", "--mode", "extractive"]);
+    assert.equal(extractive.code, 0);
+    assert.equal(extractive.stderr, "");
+    assert.equal(extractive.value.availability, "available");
+    assert.equal(extractive.value.total, 1);
+    assert.equal(extractive.value.passed, 1);
+    assert.equal(extractive.value.score, 1);
+
+    const rejectedConfigs = [
+      [{}, /DINKUS_GUIDE_BASE_URL, MODEL, and API_KEY are required/],
+      [{
+        DINKUS_GUIDE_BASE_URL: "http://remote.invalid",
+        DINKUS_GUIDE_MODEL: "nemotron-3.5-super-vl",
+        DINKUS_GUIDE_API_KEY: "test-key"
+      }, /credential-free HTTPS/],
+      [{
+        DINKUS_GUIDE_BASE_URL: "https://provider.invalid",
+        DINKUS_GUIDE_MODEL: "nemotron-3.5-lightning",
+        DINKUS_GUIDE_API_KEY: "test-key"
+      }, /model alias is retired/],
+      [{
+        DINKUS_GUIDE_BASE_URL: "not-a-url",
+        DINKUS_GUIDE_MODEL: "nemotron-3.5-super-vl",
+        DINKUS_GUIDE_API_KEY: "test-key"
+      }, /invalid model base URL/]
+    ];
+    for (const [envConfig, expectedReason] of rejectedConfigs) {
+      const unavailable = await runEval(["run", "--json", "--mode", "model"], envConfig);
+      assert.equal(unavailable.code, 2);
+      assert.equal(unavailable.stderr, "");
+      assert.equal(unavailable.value.availability, "unavailable");
+      assert.equal(unavailable.value.score, null);
+      assert.equal(unavailable.value.passed, 0);
+      assert.deepEqual(unavailable.value.results, []);
+      assert.match(unavailable.value.reason, expectedReason);
+    }
+  } finally {
+    await rm(linkDir, { recursive: true, force: true });
+    await rm(temporaryRoot, { recursive: true, force: true });
   }
 });
