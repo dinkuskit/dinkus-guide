@@ -719,7 +719,7 @@ test("MDX frontmatter and top-level imports are stripped from chunks while prese
       "",
       "```sh",
       "# Shell comment inside fence is not an ATX heading",
-      "emdash webhooks verify --secret whsec_demo",
+      "emdash webhooks list --format json",
       "```"
     ]
   };

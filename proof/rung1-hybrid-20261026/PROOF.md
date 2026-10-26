@@ -1,7 +1,7 @@
 # DinkusGuide Rung 1 proof (`#2`)
 
-Base: `11babd627bb5a6562a537bd16a2a39f8e126c5a7`
-Evaluated source (`src/` unchanged since): `25c3738b68fc87c36f5f67d31039c5f539ae1bc7`
+Base: `a234f84f285bd5f93194c43e1c4469e8253944eb` (initial base `11babd627bb5a6562a537bd16a2a39f8e126c5a7`, synced after `PR #7` ClawSweeper sender install)
+Evaluated source (`src/` unchanged since `6ec7f6c`): `25c3738b68fc87c36f5f67d31039c5f539ae1bc7` -> `6ec7f6c4472d4207b4f5dbdec1862f532449afe8`
 Issue: https://github.com/dinkuskit/dinkus-guide/issues/2
 
 ## What exists
@@ -108,9 +108,13 @@ provider transcripts are stored.
 - Epoch 2 (`eb40f112c6e7b447ae30838ab64d9cd1be15d3da`): GitHub CI passed;
   comprehensive `P3` OpenClaw review (`req-20261026T142521Z-203572822875`)
   reported 1 `P2` finding (`OC-2`: `dinkus-guide-eval --k 13..50` truncated to
-  12 without `--limit` pass-through), repaired and regression-tested in Epoch 3
-  ([REVIEW_2.md](REVIEW_2.md)).
-- Exact-head CI and comprehensive `P3` OpenClaw review must verify the current
-  PR head before human merge decision; native ClawSweeper repository onboarding
-  is not yet configured on `dinkuskit/dinkus-guide`. No merge or deployment has
+  12 without `--limit` pass-through), repaired and regression-tested in
+  `6ec7f6c` ([REVIEW_2.md](REVIEW_2.md)).
+- Epoch 3 (`6ec7f6c4472d4207b4f5dbdec1862f532449afe8`): GitHub CI passed;
+  comprehensive `P3` OpenClaw review (`req-20261026T143432Z-204686113358`)
+  finished **`clean; 0 findings`** ([REVIEW_3.md](REVIEW_3.md)).
+- Epoch 4 merges `main` (`a234f84f285bd5f93194c43e1c4469e8253944eb`, `PR #7`
+  ClawSweeper sender workflow) so exact-head CI, comprehensive `P3` OpenClaw
+  review, native ClawSweeper review, and JevSweeper baseline disposition verify
+  the synced PR head before human merge decision. No merge or deployment has
   occurred.

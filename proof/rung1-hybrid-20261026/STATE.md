@@ -1,9 +1,9 @@
 # Rung 1 hybrid retrieval delivery (`#2`)
 
-- Status: Epoch 1 (`OC-1`) and Epoch 2 (`OC-2`: `--limit` pass-through for `recall@k` when `k > 12`) `P2` findings repaired and unit-tested (`47/47`); running Epoch 3 exact-head CI and comprehensive `P3` OpenClaw review
+- Status: Epoch 3 `P3` OpenClaw review clean (`0` findings on `6ec7f6c`); merged `main` (`a234f84`, ClawSweeper sender workflow) for Epoch 4 exact-head CI + native ClawSweeper + comprehensive `P3` OpenClaw review
 - Repository: `dinkuskit/dinkus-guide`, Issue `#2`
 - Branch: `codex/dinkus-guide-rung1-20261026`
-- Base SHA: `11babd627bb5a6562a537bd16a2a39f8e126c5a7`
+- Base SHA: `a234f84f285bd5f93194c43e1c4469e8253944eb` (initial `11babd627bb5a6562a537bd16a2a39f8e126c5a7`)
 - Worktree: isolated sibling worktree
 - Owner / closer: coordinator for Bobby
 - Mutation owner: assigned worker lane for Issue `#2` (Rung 1)
