@@ -124,8 +124,11 @@ test("root decodes spaces and non-ASCII file URLs", async () => {
 test("embeddings cache syncs in batches, verifies corpusHash/symlinks, and recovers on resync", async () => {
   const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "dinkus-embeddings-cache-"));
   try {
+    await mkdir(path.join(temporaryRoot, "bin"));
     await mkdir(path.join(temporaryRoot, "src"));
     await mkdir(path.join(temporaryRoot, "corpus"));
+    await copyFile(new URL("../bin/dinkus-guide", import.meta.url), path.join(temporaryRoot, "bin", "dinkus-guide"));
+    await copyFile(new URL("../src/guide.js", import.meta.url), path.join(temporaryRoot, "src", "guide.js"));
     await copyFile(new URL("../src/corpus.js", import.meta.url), path.join(temporaryRoot, "src", "corpus.js"));
     const commit = "0123456789012345678901234567890123456789";
     const sources = [];
@@ -193,12 +196,61 @@ test("embeddings cache syncs in batches, verifies corpusHash/symlinks, and recov
     });
     assert.equal(recovered.embeddings.vectors.size, 10);
 
-    // Stale corpusHash returns null embeddings instead of mismatched vectors
-    const rawCached = JSON.parse(await readFile(isolated.embeddingsCachePath, "utf8"));
+    // Empty chunks array or out-of-date chunk keys/chunkSetHash under the same corpusHash fail closed on verifyCorpus
+    const validRawCached = JSON.parse(await readFile(isolated.embeddingsCachePath, "utf8"));
+    await writeFile(
+      isolated.embeddingsCachePath,
+      JSON.stringify({ ...validRawCached, chunks: [] }),
+      "utf8"
+    );
+    await assert.rejects(isolated.verifyCorpus(), /embeddings cache has invalid schema/);
+
+    await writeFile(
+      isolated.embeddingsCachePath,
+      JSON.stringify({ ...validRawCached, chunks: validRawCached.chunks.slice(0, -1) }),
+      "utf8"
+    );
+    await assert.rejects(
+      isolated.verifyCorpus(),
+      (err) => err.code === 3 && /out of date for current chunking/.test(err.message)
+    );
+
+    const driftedKeyCached = structuredClone(validRawCached);
+    driftedKeyCached.chunks[0].key = "doc-1:999-1000";
+    await writeFile(isolated.embeddingsCachePath, JSON.stringify(driftedKeyCached), "utf8");
+    await assert.rejects(
+      isolated.verifyCorpus(),
+      (err) => err.code === 3 && /out of date for current chunking/.test(err.message)
+    );
+
+    await writeFile(
+      isolated.embeddingsCachePath,
+      JSON.stringify({ ...validRawCached, chunkSetHash: "a".repeat(64) }),
+      "utf8"
+    );
+    await assert.rejects(
+      isolated.verifyCorpus(),
+      (err) => err.code === 3 && /out of date for current chunking/.test(err.message)
+    );
+
+    // Stale corpusHash returns null embeddings for offline BM25, while CLI corpus verify with configured embed endpoint fails closed
+    const rawCached = structuredClone(validRawCached);
     rawCached.corpusHash = "f".repeat(64);
     await writeFile(isolated.embeddingsCachePath, JSON.stringify(rawCached), "utf8");
     const staleVerified = await isolated.verifyCorpus();
     assert.equal(staleVerified.embeddings, null);
+    const { spawn } = await import("node:child_process");
+    const cliVerifyWithEmbedEnv = await new Promise((resolve) => {
+      const child = spawn(process.execPath, [path.join(temporaryRoot, "bin", "dinkus-guide"), "corpus", "verify", "--json"], {
+        cwd: temporaryRoot,
+        env: { PATH: process.env.PATH, DINKUS_GUIDE_EMBED_BASE_URL: "http://127.0.0.1:8787" }
+      });
+      let stdout = "";
+      child.stdout.on("data", (chunk) => { stdout += chunk; });
+      child.on("close", (code) => resolve({ code, value: JSON.parse(stdout) }));
+    });
+    assert.equal(cliVerifyWithEmbedEnv.code, 3);
+    assert.match(cliVerifyWithEmbedEnv.value.error, /corpus embeddings cache is missing/);
 
     // Symlinked embeddings.json is rejected
     await rm(isolated.embeddingsCachePath, { force: true });

@@ -1,7 +1,7 @@
 # DinkusGuide Rung 1 proof (`#2`)
 
 Base: `a234f84f285bd5f93194c43e1c4469e8253944eb` (initial base `11babd627bb5a6562a537bd16a2a39f8e126c5a7`, synced after `PR #7` ClawSweeper sender install)
-Evaluated source (`src/` unchanged since `6ec7f6c`): `25c3738b68fc87c36f5f67d31039c5f539ae1bc7` -> `6ec7f6c4472d4207b4f5dbdec1862f532449afe8`
+Evaluated source (retrieval/ranking in `src/guide.js` unchanged since `6ec7f6c`): `25c3738b68fc87c36f5f67d31039c5f539ae1bc7` -> `6ec7f6c4472d4207b4f5dbdec1862f532449afe8`
 Issue: https://github.com/dinkuskit/dinkus-guide/issues/2
 
 ## What exists
@@ -21,11 +21,11 @@ before model synthesis runs.
 
 - **162 pinned public MIT files** (`corpusHash`:
   `dc80b5fa494a7d7d2e90c2ae4e80cc512e217b837100e2101941e51d0ac5a501`):
-  - `dinkuskit` layer: `56` active sources (`dinkuskit/dinkuskit`: `12`,
-    `dinkuskit/commerce`: `22`, `dinkuskit/payments`: `11`,
-    `dinkuskit/inventory`: `4`, `dinkuskit/ship`: `6`,
-    `dinkuskit/template-store`: `3` active + `1` transition = `4` total across
-    DinkusKit repos).
+  - `dinkuskit` layer: `56` active sources (`dinkuskit/dinkuskit`: `14`,
+    `dinkuskit/commerce`: `9`, `dinkuskit/payments`: `19`,
+    `dinkuskit/inventory`: `4`, `dinkuskit/ship`: `6`, and
+    `dinkuskit/template-store`: `4` active in `dinkuskit` + `1` in `transition` =
+    `5` total in `dinkuskit/template-store`, `57` total across DinkusKit repos).
   - `transition` layer: `1` active source
     (`dinkuskit/template-store:docs/implementation/upstream-blocks-transition.md`).
   - `emdash` layer: `105` active sources (`README.md`, `94`
@@ -113,8 +113,16 @@ provider transcripts are stored.
 - Epoch 3 (`6ec7f6c4472d4207b4f5dbdec1862f532449afe8`): GitHub CI passed;
   comprehensive `P3` OpenClaw review (`req-20261026T143432Z-204686113358`)
   finished **`clean; 0 findings`** ([REVIEW_3.md](REVIEW_3.md)).
-- Epoch 4 merges `main` (`a234f84f285bd5f93194c43e1c4469e8253944eb`, `PR #7`
-  ClawSweeper sender workflow) so exact-head CI, comprehensive `P3` OpenClaw
-  review, native ClawSweeper review, and JevSweeper baseline disposition verify
-  the synced PR head before human merge decision. No merge or deployment has
-  occurred.
+- Epoch 4 (`21bc2c44c5dabdbe1c807288a7398aecc0651578`, synced with `main`
+  `a234f84f285bd5f93194c43e1c4469e8253944eb` after `PR #7` ClawSweeper sender
+  install): GitHub CI passed; comprehensive `P3` OpenClaw review
+  (`req-20261026T162608Z-222489725135`) reported 1 `P2` finding (`OC-3`:
+  validate `embeddings.json` chunk keys/count against `chunkCorpus(corpus)`
+  during `verifyCorpus()`); native ClawSweeper review
+  (`#issuecomment-6421682671`) scored proof `5/6` (`proof: sufficient`) and
+  reported 1 `P3` finding (`CS-1`: per-repository manifest counts in `PROOF.md`),
+  classified by JevSweeper (`jev-1.13.0`) as `repair` (`2/2` boxes) and repaired
+  together in Epoch 5 ([REVIEW_4.md](REVIEW_4.md)).
+- Epoch 5 batches the `OC-3` and `CS-1` repairs for exact-head CI, comprehensive
+  `P3` OpenClaw review, native ClawSweeper review, and JevSweeper disposition
+  before human merge decision. No merge or deployment has occurred.

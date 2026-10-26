@@ -20,7 +20,8 @@ bound to the exact `corpusHash` and returned `modelIdentity`. Running `corpus sy
 without `DINKUS_GUIDE_EMBED_BASE_URL` discards any existing `embeddings.json` so
 an operator can always recover from a stale or corrupt embedding cache into
 offline `BM25` mode. `verify` checks all source hashes and any cached
-embeddings. `ask` never writes to disk.
+embeddings against current chunk spans (requiring a current embeddings cache
+when `DINKUS_GUIDE_EMBED_BASE_URL` is set). `ask` never writes to disk.
 
 When `DINKUS_GUIDE_EMBED_BASE_URL` is unset, `ask` runs pure offline `FTS5`
 `BM25` retrieval with zero network requests in `extractive` mode. When

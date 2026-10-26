@@ -28,6 +28,9 @@ export const cacheRoot = path.join(root, ".cache", "dinkus-guide");
 export const embeddingsCachePath = path.join(cacheRoot, "embeddings.json");
 
 function digest(value) { return createHash("sha256").update(value).digest("hex"); }
+function chunkSetIdentity(chunks) {
+  return digest(JSON.stringify(chunks.map((chunk) => [chunk.key, chunk.embedText])));
+}
 
 function inferLayer(repository) {
   return repository === "emdash-cms/emdash" ? "emdash" : "dinkuskit";
@@ -137,7 +140,7 @@ function validateEmbeddingVector(vector, dimensions) {
   return normSq > 0;
 }
 
-async function loadVerifiedEmbeddings(expectedCorpusHash) {
+async function loadVerifiedEmbeddings(corpus, chunkCorpusImpl) {
   await rejectSymlinks(embeddingsCachePath, true);
   let stat;
   try {
@@ -155,11 +158,13 @@ async function loadVerifiedEmbeddings(expectedCorpusHash) {
     throw new Error("embeddings cache is not valid JSON");
   }
   if (!parsed || parsed.version !== 1 || typeof parsed.corpusHash !== "string" ||
+      (parsed.chunkSetHash !== undefined && (typeof parsed.chunkSetHash !== "string" || !SHA256.test(parsed.chunkSetHash))) ||
       typeof parsed.modelIdentity !== "string" || !parsed.modelIdentity.trim() ||
-      !Number.isInteger(parsed.dimensions) || parsed.dimensions < 1 || !Array.isArray(parsed.chunks)) {
+      !Number.isInteger(parsed.dimensions) || parsed.dimensions < 1 ||
+      !Array.isArray(parsed.chunks) || parsed.chunks.length < 1) {
     throw new Error("embeddings cache has invalid schema");
   }
-  if (parsed.corpusHash !== expectedCorpusHash) return null;
+  if (parsed.corpusHash !== corpus.corpusHash) return null;
   const vectors = new Map();
   for (const entry of parsed.chunks) {
     if (!entry || typeof entry.key !== "string" || vectors.has(entry.key) ||
@@ -168,8 +173,20 @@ async function loadVerifiedEmbeddings(expectedCorpusHash) {
     }
     vectors.set(entry.key, Float64Array.from(entry.vector));
   }
+  const resolveChunker = chunkCorpusImpl ?? (await import("./guide.js")).chunkCorpus;
+  const expectedChunks = resolveChunker(corpus);
+  const expectedChunkSetHash = chunkSetIdentity(expectedChunks);
+  if (vectors.size !== expectedChunks.length ||
+      expectedChunks.some((chunk) => !vectors.has(chunk.key)) ||
+      (parsed.chunkSetHash && parsed.chunkSetHash !== expectedChunkSetHash)) {
+    throw Object.assign(
+      new Error("corpus embeddings cache is out of date for current chunking; run corpus sync with embedding configuration"),
+      { code: 3 }
+    );
+  }
   return {
     corpusHash: parsed.corpusHash,
+    chunkSetHash: parsed.chunkSetHash ?? expectedChunkSetHash,
     requestedModel: typeof parsed.requestedModel === "string" ? parsed.requestedModel : null,
     modelIdentity: parsed.modelIdentity.trim(),
     dimensions: parsed.dimensions,
@@ -178,7 +195,8 @@ async function loadVerifiedEmbeddings(expectedCorpusHash) {
 }
 
 export async function syncCorpusEmbeddings(corpus, { embedTransport, chunkCorpusImpl, batchSize = 16 } = {}) {
-  if (!embedTransport || !chunkCorpusImpl) throw new Error("embedTransport and chunkCorpusImpl are required");
+  if (!embedTransport) throw new Error("embedTransport is required");
+  const resolveChunker = chunkCorpusImpl ?? (await import("./guide.js")).chunkCorpus;
   await rejectSymlinks(cacheRoot);
   await mkdir(cacheRoot, { recursive: true });
   await rejectSymlinks(embeddingsCachePath, true);
@@ -190,7 +208,7 @@ export async function syncCorpusEmbeddings(corpus, { embedTransport, chunkCorpus
   } catch (error) {
     if (error.code !== "ENOENT") throw error;
   }
-  const chunks = chunkCorpusImpl(corpus);
+  const chunks = resolveChunker(corpus);
   if (!chunks.length) throw new Error("cannot embed an empty corpus");
   const encoded = [];
   let modelIdentity = null;
@@ -219,6 +237,7 @@ export async function syncCorpusEmbeddings(corpus, { embedTransport, chunkCorpus
   const payload = JSON.stringify({
     version: 1,
     corpusHash: corpus.corpusHash,
+    chunkSetHash: chunkSetIdentity(chunks),
     requestedModel,
     modelIdentity,
     dimensions,
@@ -231,7 +250,7 @@ export async function syncCorpusEmbeddings(corpus, { embedTransport, chunkCorpus
   await writeFile(temporary, payload, { encoding: "utf8", mode: 0o600 });
   await rejectSymlinks(temporary, false);
   await rename(temporary, embeddingsCachePath);
-  return verifyCorpus();
+  return verifyCorpus({ chunkCorpusImpl: resolveChunker });
 }
 
 export async function syncCorpus({ fetchImpl = fetch, timeoutMs = 15_000, concurrency = 6, embedTransport, chunkCorpusImpl } = {}) {
@@ -292,7 +311,7 @@ export async function syncCorpus({ fetchImpl = fetch, timeoutMs = 15_000, concur
   return verified;
 }
 
-export async function verifyCorpus({ includeEmbeddings = true } = {}) {
+export async function verifyCorpus({ includeEmbeddings = true, chunkCorpusImpl } = {}) {
   const manifest = await loadManifest();
   const documents = [];
   for (const source of manifest.sources) {
@@ -306,7 +325,9 @@ export async function verifyCorpus({ includeEmbeddings = true } = {}) {
     documents.push({ source, text, lines: text.split(/\r?\n/) });
   }
   const corpusHash = corpusIdentity(manifest);
-  const embeddings = includeEmbeddings ? await loadVerifiedEmbeddings(corpusHash) : null;
+  const embeddings = includeEmbeddings
+    ? await loadVerifiedEmbeddings({ manifest, documents, corpusHash }, chunkCorpusImpl)
+    : null;
   return { manifest, documents, corpusHash, embeddings };
 }
 

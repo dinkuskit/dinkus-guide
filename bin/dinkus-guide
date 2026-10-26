@@ -93,12 +93,15 @@ try {
     if (positional.length !== 2 || parsed.limitSet) {
       throw Object.assign(new Error("unexpected corpus arguments"), { code: 2 });
     }
-    const embedTransport = positional[1] === "sync" ? buildEmbedTransportFromEnv() : undefined;
+    const embedTransport = buildEmbedTransportFromEnv();
     let result;
     try {
       result = positional[1] === "sync"
         ? await syncCorpus({ embedTransport, chunkCorpusImpl: chunkCorpus })
-        : await verifyCorpus();
+        : await verifyCorpus({ chunkCorpusImpl: chunkCorpus });
+      if (positional[1] === "verify" && embedTransport && !result.embeddings) {
+        throw Object.assign(new Error("corpus embeddings cache is missing; run corpus sync with embedding configuration"), { code: 3 });
+      }
     } catch (error) {
       throw Object.assign(new Error(error?.message ?? String(error)), { code: Number.isInteger(error?.code) ? error.code : 3 });
     }
@@ -110,7 +113,7 @@ try {
   }
   let corpus;
   try {
-    corpus = await verifyCorpus();
+    corpus = await verifyCorpus({ chunkCorpusImpl: chunkCorpus });
   } catch (error) {
     throw Object.assign(new Error(error?.message ?? String(error)), { code: 3 });
   }
