@@ -11,6 +11,23 @@ const root = path.resolve(path.dirname(selfPath), "..");
 const cli = path.join(root, "bin", "dinkus-guide");
 const providerUnavailableError = /^(?:model mode requires configured provider|DINKUS_GUIDE_BASE_URL, MODEL, and API_KEY are required|the model alias is retired; use nemotron-3\.5-super-vl|model base URL must be credential-free HTTPS \(or loopback HTTP\)|invalid model base URL|model provider request failed|model provider unavailable \(HTTP \d+\)|DINKUS_GUIDE_EMBED_BASE_URL and EMBED_MODEL are required|DINKUS_GUIDE_EMBED_API_KEY is required for non-loopback HTTPS embedding endpoints|embedding base URL must be credential-free HTTPS \(or loopback HTTP\)|invalid embedding base URL|embedding provider request failed|embedding provider unavailable \(HTTP \d+\)|corpus embeddings cache is (?:missing|out of date for current chunking); run corpus sync with embedding configuration)$/;
 
+export const ALLOWED_CATEGORIES = new Set([
+  "lookup",
+  "workflow",
+  "transition_trap",
+  "cross_plugin",
+  "honest_abstention",
+  "boundary_refusal"
+]);
+
+export const FAILURE_BUCKETS = [
+  "retrieval_miss",
+  "schema_error",
+  "abstention_error",
+  "citation_miss",
+  "fact_miss"
+];
+
 function isMainModule() {
   if (!process.argv[1]) return false;
   try {
@@ -20,21 +37,41 @@ function isMainModule() {
   }
 }
 
-function parseArgs() {
-  const values = { json: false, mode: "extractive", modeSet: false, k: 12, kSet: false, command: null };
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index];
+function normalizeText(value) {
+  return String(value ?? "").toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function emptyBucketCounts() {
+  return {
+    retrieval_miss: 0,
+    schema_error: 0,
+    abstention_error: 0,
+    citation_miss: 0,
+    fact_miss: 0
+  };
+}
+
+function parseArgs(rawArgs = args) {
+  const values = { json: false, mode: "extractive", modeSet: false, k: 12, kSet: false, suite: null, suiteSet: false, command: null };
+  for (let index = 0; index < rawArgs.length; index += 1) {
+    const arg = rawArgs[index];
     if (arg === "--json") { if (values.json) throw new Error("duplicate --json"); values.json = true; continue; }
     if (arg === "--mode") {
-      if (values.modeSet || index + 1 >= args.length || args[index + 1].startsWith("-")) throw new Error("missing or duplicate --mode");
-      values.modeSet = true; values.mode = args[++index]; continue;
+      if (values.modeSet || index + 1 >= rawArgs.length || rawArgs[index + 1].startsWith("-")) throw new Error("missing or duplicate --mode");
+      values.modeSet = true; values.mode = rawArgs[++index]; continue;
     }
     if (arg === "--k") {
-      if (values.kSet || index + 1 >= args.length || args[index + 1].startsWith("-")) throw new Error("missing or duplicate --k");
+      if (values.kSet || index + 1 >= rawArgs.length || rawArgs[index + 1].startsWith("-")) throw new Error("missing or duplicate --k");
       values.kSet = true;
-      const parsedK = Number(args[++index]);
+      const parsedK = Number(rawArgs[++index]);
       if (!Number.isInteger(parsedK) || parsedK < 1 || parsedK > 50) throw new Error("k must be an integer between 1 and 50");
       values.k = parsedK;
+      continue;
+    }
+    if (arg === "--suite") {
+      if (values.suiteSet || index + 1 >= rawArgs.length || rawArgs[index + 1].startsWith("-")) throw new Error("missing or duplicate --suite");
+      values.suiteSet = true;
+      values.suite = rawArgs[++index];
       continue;
     }
     if (arg.startsWith("-")) throw new Error(`unknown option: ${arg}`);
@@ -42,6 +79,130 @@ function parseArgs() {
     values.command = arg;
   }
   return values;
+}
+
+function sanitizeSuiteLabel(resolvedPath) {
+  let target = resolvedPath;
+  try { target = realpathSync(resolvedPath); } catch { /* ignore missing path before readFile */ }
+  const rel = path.relative(root, target).replace(/\\/g, "/");
+  if (rel && !rel.startsWith("..") && !path.isAbsolute(rel)) return rel;
+  return path.basename(target);
+}
+
+export function validateSuite(suite, { manifestIds = null, requireCategories = false } = {}) {
+  if (!suite || typeof suite !== "object" || Array.isArray(suite)) {
+    throw new Error("evaluation suite must be a JSON object");
+  }
+  if (!Number.isInteger(suite.version) || suite.version < 1) {
+    throw new Error("evaluation suite requires integer version >= 1");
+  }
+  if (typeof suite.suite !== "string" || !suite.suite.trim()) {
+    throw new Error("evaluation suite requires a non-empty suite identifier");
+  }
+  if (!Array.isArray(suite.cases) || !suite.cases.length) {
+    throw new Error("evaluation suite requires a non-empty cases array");
+  }
+  const enforceV4 = requireCategories || suite.version >= 4;
+  const seenIds = new Set();
+  const seenQuestions = new Set();
+
+  for (const item of suite.cases) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      throw new Error("each evaluation case must be an object");
+    }
+    if (typeof item.id !== "string" || !item.id.trim()) {
+      throw new Error("evaluation case requires a non-empty id");
+    }
+    if (seenIds.has(item.id)) {
+      throw new Error(`duplicate evaluation case id: ${item.id}`);
+    }
+    seenIds.add(item.id);
+
+    if (typeof item.question !== "string" || !item.question.trim()) {
+      throw new Error(`case ${item.id}: question must be non-empty`);
+    }
+    const normalizedQuestion = normalizeText(item.question);
+    if (seenQuestions.has(normalizedQuestion)) {
+      throw new Error(`case ${item.id}: duplicate question text`);
+    }
+    seenQuestions.add(normalizedQuestion);
+
+    if (typeof item.abstain !== "boolean") {
+      throw new Error(`case ${item.id}: abstain must be boolean`);
+    }
+    if (item.expectedStatus !== undefined) {
+      const expectedForAbstain = item.abstain ? "insufficient_evidence" : "answered";
+      if (item.expectedStatus !== expectedForAbstain) {
+        throw new Error(`case ${item.id}: expectedStatus must match abstain (${expectedForAbstain})`);
+      }
+    }
+    if (enforceV4 || item.category !== undefined) {
+      if (!ALLOWED_CATEGORIES.has(item.category)) {
+        throw new Error(`case ${item.id}: invalid or missing category`);
+      }
+      const isAbstentionCategory = item.category === "honest_abstention" || item.category === "boundary_refusal";
+      if (item.abstain !== isAbstentionCategory) {
+        throw new Error(`case ${item.id}: category ${item.category} disagrees with abstain=${item.abstain}`);
+      }
+    }
+
+    if (!Array.isArray(item.facts) || item.facts.some((fact) => typeof fact !== "string" || !fact.trim())) {
+      throw new Error(`case ${item.id}: facts must be an array of non-empty strings`);
+    }
+    if (!item.abstain && enforceV4 && item.facts.length < 2) {
+      throw new Error(`case ${item.id}: answerable v4 cases require at least 2 specific facts`);
+    }
+
+    if (item.forbiddenFacts !== undefined) {
+      if (!Array.isArray(item.forbiddenFacts) || item.forbiddenFacts.some((fact) => typeof fact !== "string" || !fact.trim())) {
+        throw new Error(`case ${item.id}: forbiddenFacts must be an array of non-empty strings`);
+      }
+    }
+
+    const sources = item.sources ?? [];
+    if (!Array.isArray(sources) || sources.some((src) => typeof src !== "string" || !src.trim())) {
+      throw new Error(`case ${item.id}: sources must be an array of source IDs`);
+    }
+    const anyOfSources = item.anyOfSources ?? [];
+    if (!Array.isArray(anyOfSources) || anyOfSources.some((group) =>
+      !Array.isArray(group) || !group.length || group.some((src) => typeof src !== "string" || !src.trim())
+    )) {
+      throw new Error(`case ${item.id}: anyOfSources must be an array of non-empty source ID arrays`);
+    }
+
+    if (item.abstain && (sources.length > 0 || anyOfSources.length > 0)) {
+      throw new Error(`case ${item.id}: abstention cases cannot require sources or anyOfSources`);
+    }
+    if (!item.abstain && sources.length + anyOfSources.length === 0) {
+      throw new Error(`case ${item.id}: answerable cases require sources or anyOfSources`);
+    }
+
+    if (manifestIds) {
+      for (const src of [...sources, ...anyOfSources.flat()]) {
+        if (!manifestIds.has(src)) {
+          throw new Error(`case ${item.id}: unknown corpus sourceId ${src}`);
+        }
+      }
+    }
+  }
+  return suite;
+}
+
+export async function loadCorpusSources(rootDir = root) {
+  const manifest = JSON.parse(await readFile(path.join(rootDir, "corpus", "manifest.json"), "utf8"));
+  const map = new Map();
+  for (const source of manifest.sources ?? []) {
+    const file = path.join(rootDir, ".cache", "dinkus-guide", "sources", `${source.id}.md`);
+    const text = await readFile(file, "utf8");
+    map.set(source.id, {
+      id: source.id,
+      repository: source.repository ?? "",
+      layer: source.layer ?? (source.repository === "emdash-cms/emdash" ? "emdash" : "dinkuskit"),
+      status: source.status ?? "active",
+      lines: text.split(/\r?\n/)
+    });
+  }
+  return map;
 }
 
 function runCli(cliArgs) {
@@ -71,179 +232,453 @@ export function evidenceForCitations(evidence, citations) {
     citation.endLine === item.endLine));
 }
 
-export function computeRecallCase(test, evidence, k = 12) {
-  const topEvidence = (evidence ?? []).slice(0, k);
-  const retrievedIds = [...new Set(topEvidence.map((item) => item.sourceId))];
-  const sourcesMatched = test.sources.filter((source) => retrievedIds.includes(source)).length;
-  const searchable = topEvidence.map((item) => item.excerpt).join("\n").toLowerCase().replace(/\s+/g, " ");
-  const factsInEvidence = test.facts.filter((fact) => searchable.includes(fact.toLowerCase().replace(/\s+/g, " "))).length;
-  const sourceHit = sourcesMatched === test.sources.length;
-  const spanFactHit = factsInEvidence === test.facts.length;
+function matchSourcesAndGroups(test, candidateIds) {
+  const mandatorySources = test.sources ?? [];
+  const sourceGroups = test.anyOfSources ?? [];
+  const mandatoryMatched = mandatorySources.filter((source) => candidateIds.includes(source)).length;
+  const groupsMatched = sourceGroups.filter((group) => group.some((source) => candidateIds.includes(source))).length;
+  const matched = mandatoryMatched + groupsMatched;
+  const required = mandatorySources.length + sourceGroups.length;
   return {
-    id: test.id,
-    k,
-    sourcesMatched,
-    sourcesRequired: test.sources.length,
-    factsInEvidence,
-    factsRequired: test.facts.length,
-    sourceHit,
-    spanFactHit,
-    hit: sourceHit && spanFactHit
+    mandatoryMatched,
+    mandatoryRequired: mandatorySources.length,
+    groupsMatched,
+    groupsRequired: sourceGroups.length,
+    matched,
+    required,
+    satisfied: matched === required
   };
 }
 
-function scoreGuideRun(test, run) {
-  const value = run.value;
-  const citations = value.citations ?? [];
-  const citedIds = [...new Set(citations.map((citation) => citation.sourceId))];
-  const citedEvidence = evidenceForCitations(value.evidence, citations);
-  const answerText = (value.answer ?? "").replace(test.question, "");
-  const searchable = `${answerText}\n${citedEvidence.map((item) => item.excerpt).join("\n")}`.toLowerCase().replace(/\s+/g, " ");
-  const facts = test.facts.filter((fact) => searchable.includes(fact.toLowerCase().replace(/\s+/g, " ")));
-  const requiredSources = test.sources.filter((source) => citedIds.includes(source));
-  const citationPass = test.abstain ? citedIds.length === 0 : requiredSources.length === test.sources.length;
-  const abstentionPass = test.abstain ? value.status === "insufficient_evidence" : value.status === "answered";
-  const exitPass = run.code === 0;
+export function computeRecallCase(test, evidence, k = 12) {
+  const topEvidence = (evidence ?? []).slice(0, k);
+  const retrievedIds = [...new Set(topEvidence.map((item) => item.sourceId))];
+  const sourceMatch = matchSourcesAndGroups(test, retrievedIds);
+  const searchable = normalizeText(topEvidence.map((item) => item.excerpt).join("\n"));
+  const factsList = test.facts ?? [];
+  const factsInEvidence = factsList.filter((fact) => searchable.includes(normalizeText(fact))).length;
+  const sourceHit = sourceMatch.satisfied;
+  const spanFactHit = factsInEvidence === factsList.length;
+  const hit = sourceHit && spanFactHit;
   return {
     id: test.id,
+    ...(test.category ? { category: test.category } : {}),
+    k,
+    sourcesMatched: sourceMatch.matched,
+    sourcesRequired: sourceMatch.required,
+    groupsMatched: sourceMatch.groupsMatched,
+    groupsRequired: sourceMatch.groupsRequired,
+    factsInEvidence,
+    factsRequired: factsList.length,
+    sourceHit,
+    spanFactHit,
+    hit,
+    failureBucket: hit ? null : "retrieval_miss"
+  };
+}
+
+export function verifyCitationSpan(citation, corpusSources = null) {
+  if (!citation || typeof citation !== "object") {
+    return { valid: false, reason: "malformed_citation" };
+  }
+  if (typeof citation.sourceId !== "string" || !citation.sourceId.trim()) {
+    return { valid: false, reason: "missing_source_id" };
+  }
+  if (!Number.isInteger(citation.startLine) || citation.startLine < 1 ||
+      !Number.isInteger(citation.endLine) || citation.endLine < citation.startLine) {
+    return { valid: false, reason: "invalid_line_range" };
+  }
+  if (!corpusSources) {
+    return { valid: true, text: null };
+  }
+  const doc = corpusSources.get(citation.sourceId);
+  if (!doc) {
+    return { valid: false, reason: "unknown_source_id" };
+  }
+  if (citation.endLine > doc.lines.length) {
+    return { valid: false, reason: "line_out_of_bounds" };
+  }
+  return {
+    valid: true,
+    text: doc.lines.slice(citation.startLine - 1, citation.endLine).join("\n")
+  };
+}
+
+export function scoreGuideRun(test, run, { corpusSources = null, recallCase = null } = {}) {
+  const value = run?.value ?? {};
+  const citations = Array.isArray(value.citations) ? value.citations : [];
+  const validCitations = [];
+  const invalidCitations = [];
+  const citedSpanTexts = [];
+
+  for (const citation of citations) {
+    const check = verifyCitationSpan(citation, corpusSources);
+    if (check.valid) {
+      validCitations.push(citation);
+      if (check.text !== null) citedSpanTexts.push(check.text);
+    } else {
+      invalidCitations.push({
+        sourceId: citation?.sourceId ?? null,
+        startLine: citation?.startLine ?? null,
+        endLine: citation?.endLine ?? null,
+        reason: check.reason
+      });
+    }
+  }
+
+  if (!corpusSources) {
+    for (const item of evidenceForCitations(value.evidence, validCitations)) {
+      citedSpanTexts.push(item.excerpt);
+    }
+  }
+
+  const validCitedIds = [...new Set(validCitations.map((citation) => citation.sourceId))];
+  const sourceMatch = matchSourcesAndGroups(test, validCitedIds);
+  const citationSpanValid = test.abstain
+    ? citations.length === 0
+    : citations.length > 0 && invalidCitations.length === 0;
+  const citationPass = test.abstain
+    ? citations.length === 0
+    : citationSpanValid && sourceMatch.satisfied;
+
+  const rawAnswer = typeof value.answer === "string" ? value.answer : "";
+  const answerText = rawAnswer.replace(test.question, "");
+  const searchable = normalizeText(`${answerText}\n${citedSpanTexts.join("\n")}`);
+  const factsList = test.facts ?? [];
+  const matchedFacts = factsList.filter((fact) => searchable.includes(normalizeText(fact)));
+
+  const forbiddenList = test.forbiddenFacts ?? [];
+  const extractiveEcho = `Relevant pinned source passages for: ${test.question}`;
+  const answerForForbidden = rawAnswer.startsWith(extractiveEcho)
+    ? rawAnswer.slice(extractiveEcho.length)
+    : rawAnswer;
+  const normalizedForbiddenTarget = normalizeText(answerForForbidden);
+  const forbiddenMatched = forbiddenList.filter((fact) => normalizedForbiddenTarget.includes(normalizeText(fact)));
+  const forbiddenPass = forbiddenMatched.length === 0;
+  const forbiddenClaim = !forbiddenPass;
+  const factPass = matchedFacts.length === factsList.length && forbiddenPass;
+
+  const expectedStatus = test.expectedStatus ?? (test.abstain ? "insufficient_evidence" : "answered");
+  const exitPass = run?.code === 0 && value.status !== "error";
+  const abstentionPass = exitPass && value.status === expectedStatus;
+  const pass = exitPass && abstentionPass && factPass && citationPass;
+
+  let failureBucket = null;
+  if (!pass) {
+    if (!exitPass) failureBucket = "schema_error";
+    else if (!test.abstain && recallCase && !recallCase.sourceHit) failureBucket = "retrieval_miss";
+    else if (!abstentionPass) failureBucket = "abstention_error";
+    else if (!citationSpanValid) failureBucket = "citation_miss";
+    else if (!factPass) failureBucket = "fact_miss";
+    else failureBucket = "citation_miss";
+  }
+
+  return {
+    id: test.id,
+    ...(test.category ? { category: test.category } : {}),
     status: value.status ?? "error",
-    factsMatched: facts.length,
-    factsRequired: test.facts.length,
-    citationsMatched: requiredSources.length,
-    citationsRequired: test.abstain ? 0 : test.sources.length,
+    expectedStatus,
+    factsMatched: matchedFacts.length,
+    factsRequired: factsList.length,
+    forbiddenMatched,
+    forbiddenPass,
+    forbiddenClaim,
+    citationsMatched: test.abstain ? 0 : sourceMatch.matched,
+    citationsRequired: test.abstain ? 0 : sourceMatch.required,
+    invalidCitations: invalidCitations.length,
+    citationSpanValid,
     abstentionPass,
     citationPass,
-    exitCode: run.code,
-    pass: exitPass && facts.length === test.facts.length && citationPass && abstentionPass
+    factPass,
+    exitCode: run?.code ?? 1,
+    pass,
+    failureBucket
+  };
+}
+
+function inferCaseLayer(test, corpusSources) {
+  if (test.abstain) return "abstention";
+  const allSources = [...(test.sources ?? []), ...(test.anyOfSources ?? []).flat()];
+  if (!corpusSources || !allSources.length) return "unknown";
+  const layers = new Set();
+  for (const src of allSources) {
+    const doc = corpusSources.get(src);
+    if (doc?.layer) layers.add(doc.layer);
+  }
+  if (!layers.size) return "unknown";
+  return layers.size === 1 ? [...layers][0] : "cross_layer";
+}
+
+export function summarizeSuiteResults(cases, results, corpusSources = null) {
+  const byId = new Map(cases.map((item) => [item.id, item]));
+  const failureBuckets = emptyBucketCounts();
+  const byCategory = {};
+  const byLayer = {};
+  let passed = 0;
+  let forbiddenClaims = 0;
+
+  for (const result of results) {
+    const isPass = Boolean(result.pass ?? result.hit);
+    if (isPass) passed += 1;
+    else if (result.failureBucket && Object.hasOwn(failureBuckets, result.failureBucket)) {
+      failureBuckets[result.failureBucket] += 1;
+    }
+    if (result.forbiddenClaim) forbiddenClaims += 1;
+
+    const test = byId.get(result.id);
+    const category = result.category ?? test?.category ?? "uncategorized";
+    if (!byCategory[category]) {
+      byCategory[category] = { total: 0, passed: 0, failed: 0, score: 1, failureBuckets: emptyBucketCounts() };
+    }
+    byCategory[category].total += 1;
+    if (isPass) byCategory[category].passed += 1;
+    else {
+      byCategory[category].failed += 1;
+      if (result.failureBucket && Object.hasOwn(byCategory[category].failureBuckets, result.failureBucket)) {
+        byCategory[category].failureBuckets[result.failureBucket] += 1;
+      }
+    }
+
+    const layer = test ? inferCaseLayer(test, corpusSources) : "unknown";
+    if (!byLayer[layer]) {
+      byLayer[layer] = { total: 0, passed: 0, failed: 0, score: 1, failureBuckets: emptyBucketCounts() };
+    }
+    byLayer[layer].total += 1;
+    if (isPass) byLayer[layer].passed += 1;
+    else {
+      byLayer[layer].failed += 1;
+      if (result.failureBucket && Object.hasOwn(byLayer[layer].failureBuckets, result.failureBucket)) {
+        byLayer[layer].failureBuckets[result.failureBucket] += 1;
+      }
+    }
+  }
+
+  for (const group of [...Object.values(byCategory), ...Object.values(byLayer)]) {
+    group.score = group.total ? group.passed / group.total : 1;
+  }
+
+  const total = results.length;
+  const failed = total - passed;
+  return {
+    total,
+    passed,
+    failed,
+    score: total ? passed / total : 1,
+    failureBuckets,
+    forbiddenClaims,
+    byCategory,
+    byLayer
   };
 }
 
 if (isMainModule()) {
-const jsonOutput = args.includes("--json");
-const failUsage = (message) => {
-  if (jsonOutput) console.log(JSON.stringify({ status: "error", error: message }));
-  else console.error(`dinkus-guide-eval: ${message}`);
-  process.exit(2);
-};
-let options;
-try { options = parseArgs(); } catch (error) { failUsage(error.message); }
-if (!args.length) {
-  console.log("Usage: dinkus-guide-eval run [--json] [--mode extractive|model|recall] [--k 12]");
-  process.exit(0);
-}
-if (options.command === null) failUsage("expected command: run");
-if (options.command !== "run") failUsage(`unexpected command: ${options.command}`);
-if (!["extractive", "model", "recall"].includes(options.mode)) failUsage("mode must be extractive, model, or recall");
+  const jsonOutput = args.includes("--json");
+  const failUsage = (message) => {
+    if (jsonOutput) console.log(JSON.stringify({ status: "error", error: message }));
+    else console.error(`dinkus-guide-eval: ${message}`);
+    process.exit(2);
+  };
+  let options;
+  try { options = parseArgs(); } catch (error) { failUsage(error.message); }
+  if (!args.length) {
+    console.log("Usage: dinkus-guide-eval run [--suite eval/cases.json] [--json] [--mode extractive|model|retrieval|recall] [--k 12]");
+    process.exit(0);
+  }
+  if (options.command === null) failUsage("expected command: run");
+  if (options.command !== "run") failUsage(`unexpected command: ${options.command}`);
+  if (!["extractive", "model", "retrieval", "recall"].includes(options.mode)) {
+    failUsage("mode must be extractive, model, retrieval, or recall");
+  }
 
-const suite = JSON.parse(await readFile(path.join(root, "eval", "cases.json"), "utf8"));
-const corpusRun = await runCli(["corpus", "verify", "--json"]);
-if (corpusRun.code !== 0) {
-  const report = { suite: suite.suite, suiteVersion: suite.version, mode: options.mode, availability: "unavailable",
-    reason: corpusRun.value.error || corpusRun.stderr, total: suite.cases.length, passed: 0, score: null, results: [] };
-  console.log(options.json ? JSON.stringify(report) : `unavailable: ${report.reason}`);
-  process.exit(2);
-}
+  const suitePath = options.suite
+    ? path.resolve(process.cwd(), options.suite)
+    : path.join(root, "eval", "cases.json");
+  const suiteFile = sanitizeSuiteLabel(suitePath);
 
-// Step 1: Standalone retrieval recall@k before any model synthesis runs
-const extractiveRuns = [];
-const recallCases = [];
-for (const test of suite.cases) {
-  const run = await runGuide(test.question, "extractive", options.k);
-  if ((run.code === 3 || run.code === 4) && providerUnavailableError.test(run.value.error || "")) {
-    const report = { suite: suite.suite, suiteVersion: suite.version, mode: options.mode, availability: "unavailable",
-      reason: run.value.error, total: suite.cases.length, passed: 0, score: null, results: [] };
+  let rawSuiteText;
+  try {
+    rawSuiteText = await readFile(suitePath, "utf8");
+  } catch (error) {
+    failUsage(`invalid suite (${suiteFile}): ${error?.code === "ENOENT" ? "suite file not found" : "unable to read suite file"}`);
+  }
+  let suite;
+  try {
+    let parsedSuite;
+    try { parsedSuite = JSON.parse(rawSuiteText); } catch { throw new Error("suite is not valid JSON"); }
+    suite = validateSuite(parsedSuite);
+  } catch (error) {
+    failUsage(`invalid suite (${suiteFile}): ${error.message}`);
+  }
+
+  const corpusRun = await runCli(["corpus", "verify", "--json"]);
+  if (corpusRun.code !== 0) {
+    const report = {
+      suite: suite.suite,
+      suiteFile,
+      suiteVersion: suite.version,
+      mode: options.mode,
+      availability: "unavailable",
+      reason: corpusRun.value.error || corpusRun.stderr,
+      total: suite.cases.length,
+      passed: 0,
+      failed: 0,
+      score: null,
+      results: []
+    };
     console.log(options.json ? JSON.stringify(report) : `unavailable: ${report.reason}`);
     process.exit(2);
   }
-  if (options.k === 12) extractiveRuns.push({ test, run });
-  if (!test.abstain) {
-    recallCases.push(computeRecallCase(test, run.value.evidence, options.k));
+
+  const corpusSources = await loadCorpusSources(root);
+  try {
+    validateSuite(suite, { manifestIds: new Set(corpusSources.keys()) });
+  } catch (error) {
+    failUsage(`invalid suite (${suiteFile}): ${error.message}`);
   }
-}
 
-const sourceHits = recallCases.filter((item) => item.sourceHit).length;
-const spanHits = recallCases.filter((item) => item.hit).length;
-const recall = {
-  k: options.k,
-  eligible: recallCases.length,
-  sourceHits,
-  sourceRecallAtK: recallCases.length ? sourceHits / recallCases.length : 1,
-  hits: spanHits,
-  recallAtK: recallCases.length ? spanHits / recallCases.length : 1,
-  cases: recallCases
-};
-
-if (!options.json) {
-  console.log(`recall@${options.k}: ${spanHits}/${recallCases.length} (${(recall.recallAtK * 100).toFixed(1)}%), sourceRecall@${options.k}: ${sourceHits}/${recallCases.length} (${(recall.sourceRecallAtK * 100).toFixed(1)}%)`);
-}
-
-if (options.mode === "recall") {
-  const report = {
-    suite: suite.suite,
-    suiteVersion: suite.version,
-    mode: "recall",
-    availability: "available",
-    corpusHash: corpusRun.value.corpusHash ?? null,
-    total: recall.eligible,
-    passed: recall.hits,
-    score: recall.recallAtK,
-    recall,
-    results: recall.cases
-  };
-  if (options.json) console.log(JSON.stringify(report));
-  process.exit(recall.hits === recall.eligible ? 0 : 1);
-}
-
-// Step 2: Score extractive or run Worker B model synthesis
-const results = [];
-const modelIdentities = new Set();
-if (options.mode === "extractive") {
-  if (options.k === 12) {
-    for (const { test, run } of extractiveRuns) {
-      results.push(scoreGuideRun(test, run));
-    }
-  } else {
-    for (const test of suite.cases) {
-      const run = await runGuide(test.question, "extractive", 12);
-      if ((run.code === 3 || run.code === 4) && providerUnavailableError.test(run.value.error || "")) {
-        const report = { suite: suite.suite, suiteVersion: suite.version, mode: options.mode, availability: "unavailable",
-          reason: run.value.error, recall, total: suite.cases.length, passed: 0, score: null, results: [] };
-        console.log(options.json ? JSON.stringify(report) : `unavailable: ${report.reason}`);
-        process.exit(2);
-      }
-      results.push(scoreGuideRun(test, run));
-    }
-  }
-} else {
+  // Step 1: Standalone retrieval recall@k before any model synthesis runs
+  const extractiveRuns = [];
+  const recallCases = [];
+  const recallById = new Map();
   for (const test of suite.cases) {
-    const run = await runGuide(test.question, "model");
-    const value = run.value;
-    if (value.modelIdentity) modelIdentities.add(value.modelIdentity);
-    if ((run.code === 3 || run.code === 4) && providerUnavailableError.test(value.error || "")) {
-      const report = { suite: suite.suite, suiteVersion: suite.version, mode: options.mode, availability: "unavailable",
-        reason: value.error, recall, total: suite.cases.length, passed: 0, score: null, results: [] };
+    const run = await runGuide(test.question, "extractive", options.k);
+    if ((run.code === 3 || run.code === 4) && providerUnavailableError.test(run.value.error || "")) {
+      const report = {
+        suite: suite.suite,
+        suiteFile,
+        suiteVersion: suite.version,
+        mode: options.mode,
+        availability: "unavailable",
+        reason: run.value.error,
+        total: suite.cases.length,
+        passed: 0,
+        failed: 0,
+        score: null,
+        results: []
+      };
       console.log(options.json ? JSON.stringify(report) : `unavailable: ${report.reason}`);
       process.exit(2);
     }
-    results.push(scoreGuideRun(test, run));
+    extractiveRuns.push({ test, run });
+    if (!test.abstain) {
+      const rc = computeRecallCase(test, run.value.evidence, options.k);
+      recallCases.push(rc);
+      recallById.set(test.id, rc);
+    }
   }
-}
 
-const passed = results.filter((result) => result.pass).length;
-const report = {
-  suite: suite.suite,
-  suiteVersion: suite.version,
-  mode: options.mode,
-  availability: "available",
-  modelIdentity: options.mode === "model" ? [...modelIdentities] : undefined,
-  corpusHash: corpusRun.value.corpusHash ?? null,
-  recall,
-  total: results.length,
-  passed,
-  score: passed / results.length,
-  results
-};
-if (options.json) console.log(JSON.stringify(report));
-else console.log(`${passed}/${results.length} passed (${(report.score * 100).toFixed(1)}%) in ${options.mode} mode`);
-process.exit(passed === results.length ? 0 : 1);
+  const sourceHits = recallCases.filter((item) => item.sourceHit).length;
+  const spanHits = recallCases.filter((item) => item.hit).length;
+  const recall = {
+    k: options.k,
+    eligible: recallCases.length,
+    sourceHits,
+    sourceRecallAtK: recallCases.length ? sourceHits / recallCases.length : 1,
+    hits: spanHits,
+    recallAtK: recallCases.length ? spanHits / recallCases.length : 1,
+    cases: recallCases
+  };
+
+  if (!options.json) {
+    console.log(`recall@${options.k}: ${spanHits}/${recallCases.length} (${(recall.recallAtK * 100).toFixed(1)}%), sourceRecall@${options.k}: ${sourceHits}/${recallCases.length} (${(recall.sourceRecallAtK * 100).toFixed(1)}%)`);
+  }
+
+  if (options.mode === "retrieval" || options.mode === "recall") {
+    const answerableCases = suite.cases.filter((item) => !item.abstain);
+    const summary = summarizeSuiteResults(answerableCases, recallCases, corpusSources);
+    const report = {
+      suite: suite.suite,
+      suiteFile,
+      suiteVersion: suite.version,
+      mode: options.mode,
+      availability: "available",
+      corpusHash: corpusRun.value.corpusHash ?? null,
+      total: summary.total,
+      passed: summary.passed,
+      failed: summary.failed,
+      score: summary.score,
+      failureBuckets: summary.failureBuckets,
+      forbiddenClaims: 0,
+      byCategory: summary.byCategory,
+      byLayer: summary.byLayer,
+      recall,
+      results: recall.cases
+    };
+    if (options.json) console.log(JSON.stringify(report));
+    process.exit(recall.hits === recall.eligible ? 0 : 1);
+  }
+
+  // Step 2: Score extractive or run Worker B model synthesis
+  const results = [];
+  const modelIdentities = new Set();
+  if (options.mode === "extractive") {
+    for (const { test, run } of extractiveRuns) {
+      results.push(scoreGuideRun(test, run, { corpusSources, recallCase: recallById.get(test.id) ?? null }));
+    }
+  } else {
+    for (const test of suite.cases) {
+      const run = await runGuide(test.question, "model", options.k);
+      const value = run.value;
+      if (value.modelIdentity) modelIdentities.add(value.modelIdentity);
+      if ((run.code === 3 || run.code === 4) && providerUnavailableError.test(value.error || "")) {
+        const report = {
+          suite: suite.suite,
+          suiteFile,
+          suiteVersion: suite.version,
+          mode: options.mode,
+          availability: "unavailable",
+          reason: value.error,
+          recall,
+          total: suite.cases.length,
+          passed: 0,
+          failed: 0,
+          score: null,
+          results: []
+        };
+        console.log(options.json ? JSON.stringify(report) : `unavailable: ${report.reason}`);
+        process.exit(2);
+      }
+      results.push(scoreGuideRun(test, run, { corpusSources, recallCase: recallById.get(test.id) ?? null }));
+    }
+  }
+
+  const summary = summarizeSuiteResults(suite.cases, results, corpusSources);
+  const subscores = {
+    abstentionPassed: results.filter((r) => r.abstentionPass).length,
+    citationSpanValid: results.filter((r) => r.citationSpanValid).length,
+    citationPassed: results.filter((r) => r.citationPass).length,
+    factPassed: results.filter((r) => r.factPass).length,
+    forbiddenPassed: results.filter((r) => r.forbiddenPass).length
+  };
+  const report = {
+    suite: suite.suite,
+    suiteFile,
+    suiteVersion: suite.version,
+    mode: options.mode,
+    availability: "available",
+    modelIdentity: options.mode === "model" ? [...modelIdentities] : undefined,
+    corpusHash: corpusRun.value.corpusHash ?? null,
+    recall,
+    total: summary.total,
+    passed: summary.passed,
+    failed: summary.failed,
+    score: summary.score,
+    failureBuckets: summary.failureBuckets,
+    forbiddenClaims: summary.forbiddenClaims,
+    subscores,
+    byCategory: summary.byCategory,
+    byLayer: summary.byLayer,
+    results
+  };
+  if (options.json) {
+    console.log(JSON.stringify(report));
+  } else {
+    console.log(`${summary.passed}/${summary.total} passed (${(report.score * 100).toFixed(1)}%) in ${options.mode} mode`);
+    console.log(
+      `buckets: retrieval_miss=${summary.failureBuckets.retrieval_miss} schema_error=${summary.failureBuckets.schema_error} ` +
+      `abstention_error=${summary.failureBuckets.abstention_error} citation_miss=${summary.failureBuckets.citation_miss} ` +
+      `fact_miss=${summary.failureBuckets.fact_miss} (forbiddenClaims=${summary.forbiddenClaims})`
+    );
+  }
+  process.exit(summary.passed === summary.total ? 0 : 1);
 }
