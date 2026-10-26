@@ -5,7 +5,7 @@ Node 24 native ESM (`node:sqlite` built-in), with no npm runtime dependencies.
 ```text
 dinkus-guide corpus sync [--json]
 dinkus-guide corpus verify [--json]
-dinkus-guide ask QUESTION [--json] [--mode extractive|model]
+dinkus-guide ask QUESTION [--json] [--mode extractive|model] [--limit 12]
 dinkus-guide-eval run [--json] [--mode extractive|model|recall] [--k 12]
 ```
 

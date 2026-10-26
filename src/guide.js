@@ -660,13 +660,14 @@ export function validateEvidenceIds(evidence) {
     new Set(ids).size === ids.length;
 }
 
-export async function answerQuestion(question, corpus, { mode = "extractive", transport, embedTransport } = {}) {
+export async function answerQuestion(question, corpus, { mode = "extractive", limit = 12, transport, embedTransport } = {}) {
   if (typeof question !== "string" || !question.trim()) throw new Error("question must be non-empty");
   if (!["extractive", "model"].includes(mode)) throw new Error("mode must be extractive or model");
+  if (!Number.isInteger(limit) || limit < 1 || limit > 50) throw new Error("limit must be an integer between 1 and 50");
   const blocked = refusalOrUnsupported(question, corpus);
   if (blocked) return { mode, corpusHash: corpus.corpusHash, ...blocked };
 
-  const evidence = await retrieveEvidence(question, corpus, { embedTransport });
+  const evidence = await retrieveEvidence(question, corpus, { limit, embedTransport });
   if (!evidence.length) {
     return { mode, corpusHash: corpus.corpusHash, ...insufficient("The pinned public corpus does not contain enough evidence to answer this question.") };
   }

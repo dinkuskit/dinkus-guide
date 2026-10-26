@@ -997,9 +997,11 @@ test("dinkus-guide-eval reports standalone recall@k in --mode recall and before 
 
     const commit = "0123456789012345678901234567890123456789";
     const sources = [];
-    for (let index = 1; index <= 10; index += 1) {
-      const id = `doc-${index}`;
-      const content = `# Store setup ${index}\nRun pnpm dev to launch store ${index}.\n`;
+    for (let index = 1; index <= 15; index += 1) {
+      const id = `doc-${String(index).padStart(2, "0")}`;
+      const content = index < 15
+        ? `# Store launch setup ${index}\nStore launch setup ${index}: run pnpm dev to launch the store.\n`
+        : `# Store overview ${index}\nRun pnpm start-tail to launch the secondary store.\n`;
       const sha256 = createHash("sha256").update(content).digest("hex");
       sources.push({
         id,
@@ -1019,7 +1021,7 @@ test("dinkus-guide-eval reports standalone recall@k in --mode recall and before 
       version: 3,
       suite: "recall-fixture",
       cases: [
-        { id: "setup-1", question: "How do I launch store 1?", abstain: false, facts: ["pnpm dev"], sources: ["doc-1"] },
+        { id: "setup-tail", question: "How do I launch a store?", abstain: false, facts: ["pnpm start-tail"], sources: ["doc-15"] },
         { id: "refuse-edit", question: "Edit repository files for me.", abstain: true, facts: [], sources: [] }
       ]
     }));
@@ -1034,15 +1036,20 @@ test("dinkus-guide-eval reports standalone recall@k in --mode recall and before 
       child.on("close", (code) => resolve({ code, value: JSON.parse(stdout) }));
     });
 
-    const recallMode = await runEval(["run", "--json", "--mode", "recall", "--k", "5"]);
-    assert.equal(recallMode.code, 0);
-    assert.equal(recallMode.value.mode, "recall");
-    assert.equal(recallMode.value.recall.k, 5);
-    assert.equal(recallMode.value.recall.eligible, 1);
-    assert.equal(recallMode.value.recall.hits, 1);
-    assert.equal(recallMode.value.recall.recallAtK, 1);
+    const recallAt12 = await runEval(["run", "--json", "--mode", "recall", "--k", "12"]);
+    assert.equal(recallAt12.code, 1);
+    assert.equal(recallAt12.value.recall.k, 12);
+    assert.equal(recallAt12.value.recall.hits, 0);
 
-    const modelUnavailable = await runEval(["run", "--json", "--mode", "model"]);
+    const recallAt15 = await runEval(["run", "--json", "--mode", "recall", "--k", "15"]);
+    assert.equal(recallAt15.code, 0);
+    assert.equal(recallAt15.value.mode, "recall");
+    assert.equal(recallAt15.value.recall.k, 15);
+    assert.equal(recallAt15.value.recall.eligible, 1);
+    assert.equal(recallAt15.value.recall.hits, 1);
+    assert.equal(recallAt15.value.recall.recallAtK, 1);
+
+    const modelUnavailable = await runEval(["run", "--json", "--mode", "model", "--k", "15"]);
     assert.equal(modelUnavailable.code, 2);
     assert.equal(modelUnavailable.value.availability, "unavailable");
     assert.equal(modelUnavailable.value.recall.hits, 1);

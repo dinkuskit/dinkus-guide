@@ -103,8 +103,13 @@ provider transcripts are stored.
 - Epoch 1 (`0835ec55cfd474043cfbfd2cedafe13db4bcbb6a`): GitHub CI passed;
   comprehensive `P3` OpenClaw review (`req-20261026T141702Z-202754229745`)
   reported 1 `P2` finding (`OC-1`: offline `corpus sync` recovery when
-  `embeddings.json` is corrupt), repaired and regression-tested in Epoch 2
+  `embeddings.json` is corrupt), repaired and regression-tested in `eb40f11`
   ([REVIEW_1.md](REVIEW_1.md)).
+- Epoch 2 (`eb40f112c6e7b447ae30838ab64d9cd1be15d3da`): GitHub CI passed;
+  comprehensive `P3` OpenClaw review (`req-20261026T142521Z-203572822875`)
+  reported 1 `P2` finding (`OC-2`: `dinkus-guide-eval --k 13..50` truncated to
+  12 without `--limit` pass-through), repaired and regression-tested in Epoch 3
+  ([REVIEW_2.md](REVIEW_2.md)).
 - Exact-head CI and comprehensive `P3` OpenClaw review must verify the current
   PR head before human merge decision; native ClawSweeper repository onboarding
   is not yet configured on `dinkuskit/dinkus-guide`. No merge or deployment has

@@ -1,6 +1,6 @@
 # Rung 1 hybrid retrieval delivery (`#2`)
 
-- Status: Epoch 1 `P2` review finding (`OC-1`: corrupt `embeddings.json` recovery on offline `corpus sync`) repaired and unit-tested (`47/47`); running Epoch 2 exact-head CI and comprehensive `P3` OpenClaw review
+- Status: Epoch 1 (`OC-1`) and Epoch 2 (`OC-2`: `--limit` pass-through for `recall@k` when `k > 12`) `P2` findings repaired and unit-tested (`47/47`); running Epoch 3 exact-head CI and comprehensive `P3` OpenClaw review
 - Repository: `dinkuskit/dinkus-guide`, Issue `#2`
 - Branch: `codex/dinkus-guide-rung1-20261026`
 - Base SHA: `11babd627bb5a6562a537bd16a2a39f8e126c5a7`

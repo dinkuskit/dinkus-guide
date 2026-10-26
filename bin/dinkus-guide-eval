@@ -58,7 +58,11 @@ function runCli(cliArgs) {
   });
 }
 
-function runGuide(question, mode) { return runCli(["ask", question, "--json", "--mode", mode]); }
+function runGuide(question, mode, limit = 12) {
+  const cliArgs = ["ask", question, "--json", "--mode", mode];
+  if (limit !== 12) cliArgs.push("--limit", String(limit));
+  return runCli(cliArgs);
+}
 
 export function evidenceForCitations(evidence, citations) {
   return (evidence ?? []).filter((item) => (citations ?? []).some((citation) =>
@@ -144,14 +148,14 @@ if (corpusRun.code !== 0) {
 const extractiveRuns = [];
 const recallCases = [];
 for (const test of suite.cases) {
-  const run = await runGuide(test.question, "extractive");
+  const run = await runGuide(test.question, "extractive", options.k);
   if ((run.code === 3 || run.code === 4) && providerUnavailableError.test(run.value.error || "")) {
     const report = { suite: suite.suite, suiteVersion: suite.version, mode: options.mode, availability: "unavailable",
       reason: run.value.error, total: suite.cases.length, passed: 0, score: null, results: [] };
     console.log(options.json ? JSON.stringify(report) : `unavailable: ${report.reason}`);
     process.exit(2);
   }
-  extractiveRuns.push({ test, run });
+  if (options.k === 12) extractiveRuns.push({ test, run });
   if (!test.abstain) {
     recallCases.push(computeRecallCase(test, run.value.evidence, options.k));
   }
@@ -194,8 +198,21 @@ if (options.mode === "recall") {
 const results = [];
 const modelIdentities = new Set();
 if (options.mode === "extractive") {
-  for (const { test, run } of extractiveRuns) {
-    results.push(scoreGuideRun(test, run));
+  if (options.k === 12) {
+    for (const { test, run } of extractiveRuns) {
+      results.push(scoreGuideRun(test, run));
+    }
+  } else {
+    for (const test of suite.cases) {
+      const run = await runGuide(test.question, "extractive", 12);
+      if ((run.code === 3 || run.code === 4) && providerUnavailableError.test(run.value.error || "")) {
+        const report = { suite: suite.suite, suiteVersion: suite.version, mode: options.mode, availability: "unavailable",
+          reason: run.value.error, recall, total: suite.cases.length, passed: 0, score: null, results: [] };
+        console.log(options.json ? JSON.stringify(report) : `unavailable: ${report.reason}`);
+        process.exit(2);
+      }
+      results.push(scoreGuideRun(test, run));
+    }
   }
 } else {
   for (const test of suite.cases) {
