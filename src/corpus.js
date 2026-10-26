@@ -194,7 +194,7 @@ async function loadVerifiedEmbeddings(corpus, chunkCorpusImpl) {
   };
 }
 
-export async function syncCorpusEmbeddings(corpus, { embedTransport, chunkCorpusImpl, batchSize = 16 } = {}) {
+export async function syncCorpusEmbeddings(corpus, { embedTransport, chunkCorpusImpl, batchSize = 16, maxEmbeddingsBytes = MAX_EMBEDDINGS_BYTES } = {}) {
   if (!embedTransport) throw new Error("embedTransport is required");
   const resolveChunker = chunkCorpusImpl ?? (await import("./guide.js")).chunkCorpus;
   await rejectSymlinks(cacheRoot);
@@ -250,8 +250,8 @@ export async function syncCorpusEmbeddings(corpus, { embedTransport, chunkCorpus
     dimensions,
     chunks: encoded
   });
-  if (Buffer.byteLength(payload, "utf8") > MAX_EMBEDDINGS_BYTES) {
-    throw new Error("embeddings cache exceeds size limit");
+  if (Buffer.byteLength(payload, "utf8") > maxEmbeddingsBytes) {
+    throw Object.assign(new Error("embeddings cache exceeds size limit"), { code: 4 });
   }
   const temporary = `${embeddingsCachePath}.${process.pid}.${Date.now()}.tmp`;
   await writeFile(temporary, payload, { encoding: "utf8", mode: 0o600 });

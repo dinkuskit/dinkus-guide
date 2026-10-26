@@ -129,6 +129,12 @@ provider transcripts are stored.
   `P3` OpenClaw review (`req-20261026T165422Z-22770784078`) reported 1 `P3`
   finding (`OC-4`: classify `syncCorpusEmbeddings` provider/output failures as
   exit code `4`), repaired and regression-tested in Epoch 6 ([REVIEW_5.md](REVIEW_5.md)).
-- Epoch 6 verifies the `OC-4` exit-code refinement across exact-head CI,
+- Epoch 6 (`f642ccadaaab8c4f8e6dd185d2e2cf1140fe1b8b`): GitHub CI passed; native
+  ClawSweeper (`#issuecomment-6421682671` Revision 3) remained `Ready for
+  maintainer review` (`0` findings, JevSweeper `no-leftovers`); comprehensive
+  `P3` OpenClaw review (`req-20261026T170859Z-229803214798`) reported 1 `P3`
+  finding (`OC-5`: classify `syncCorpusEmbeddings` size-limit overflow as exit
+  code `4`), repaired and regression-tested in Epoch 7 ([REVIEW_6.md](REVIEW_6.md)).
+- Epoch 7 verifies the `OC-5` exit-code alignment across exact-head CI,
   comprehensive `P3` OpenClaw review, native ClawSweeper review, and JevSweeper
   disposition before human merge decision. No merge or deployment has occurred.

@@ -1,6 +1,6 @@
 # Rung 1 hybrid retrieval delivery (`#2`)
 
-- Status: Native ClawSweeper clean (`Ready for maintainer review` on `e4b690c`, JevSweeper `no-leftovers`); repaired OpenClaw `OC-4` (`code: 4` on `syncCorpusEmbeddings` provider/output errors) for Epoch 6 exact-head verification
+- Status: Native ClawSweeper clean (`Ready for maintainer review` on `f642cca`, JevSweeper `no-leftovers`); repaired OpenClaw `OC-5` (`code: 4` on `syncCorpusEmbeddings` size-limit overflow) for Epoch 7 exact-head verification
 - Repository: `dinkuskit/dinkus-guide`, Issue `#2`
 - Branch: `codex/dinkus-guide-rung1-20261026`
 - Base SHA: `a234f84f285bd5f93194c43e1c4469e8253944eb` (initial `11babd627bb5a6562a537bd16a2a39f8e126c5a7`)

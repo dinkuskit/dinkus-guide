@@ -204,6 +204,17 @@ test("embeddings cache syncs in batches, verifies corpusHash/symlinks, and recov
       }),
       (err) => err.code === 4 && /invalid vector/.test(err.message)
     );
+    await assert.rejects(
+      isolated.syncCorpusEmbeddings(synced, {
+        chunkCorpusImpl: chunkCorpus,
+        maxEmbeddingsBytes: 128,
+        embedTransport: async ({ inputs }) => ({
+          model: "qwen3-embedding:0.6b",
+          vectors: inputs.map(() => [1, 0.2, 0.5])
+        })
+      }),
+      (err) => err.code === 4 && /exceeds size limit/.test(err.message)
+    );
 
     // Corrupt embeddings.json fails closed on verifyCorpus, and recovers cleanly on normal syncCorpus without embedTransport
     await writeFile(isolated.embeddingsCachePath, "{corrupt-json", "utf8");
