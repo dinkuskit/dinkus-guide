@@ -90,7 +90,7 @@ try {
   if (!["extractive", "model"].includes(parsed.mode)) throw Object.assign(new Error("mode must be extractive or model"), { code: 2 });
   const positional = parsed.positional;
   if (positional[0] === "corpus" && ["sync", "verify"].includes(positional[1])) {
-    if (positional.length !== 2 || parsed.modeSet || parsed.limitSet) {
+    if (positional.length !== 2 || parsed.limitSet) {
       throw Object.assign(new Error("unexpected corpus arguments"), { code: 2 });
     }
     const embedTransport = positional[1] === "sync" ? buildEmbedTransportFromEnv() : undefined;
