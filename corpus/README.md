@@ -11,16 +11,15 @@ These describe direction and planning, not proof of shipped capabilities.
 This separate document allowlist does not expand the seven product/API
 repositories covered by existing frozen evaluation suites.
 
-The pins use public candidate commit
-`344d6f54877d5490449b477c8e43f7409e55cc81`, which adds the owner-approved
-scoped MIT license in [org PR #16](https://github.com/dinkuskit/.github/pull/16).
-That PR is a merge dependency; this pin is not a claim that the license change
-is on the org's main branch. Recheck the dependency before merging this corpus
-update. All existing source pins remain unchanged; refreshing the website
-sources awaits corrected, merged website documentation.
+The pins use merged commit `ad903228db64e95c7fa985857df562e9a580c6a8`
+from [org PR #16](https://github.com/dinkuskit/.github/pull/16), which adds the
+owner-approved scoped MIT license. The document bytes and hashes are unchanged
+from reviewed candidate `344d6f54877d5490449b477c8e43f7409e55cc81`.
+The licensing dependency is resolved. All other source pins remain unchanged;
+refreshing the website sources awaits corrected, merged website documentation.
 
 The source files retain their notices and links to
-[`LICENSE-DOCUMENTS.md`](https://github.com/dinkuskit/.github/blob/344d6f54877d5490449b477c8e43f7409e55cc81/LICENSE-DOCUMENTS.md).
+[`LICENSE-DOCUMENTS.md`](https://github.com/dinkuskit/.github/blob/ad903228db64e95c7fa985857df562e9a580c6a8/LICENSE-DOCUMENTS.md).
 That license applies only to these two documents, not `CONTRIBUTING.md`, other
 org files, or other repositories. Attribution and the permission notice follow.
 

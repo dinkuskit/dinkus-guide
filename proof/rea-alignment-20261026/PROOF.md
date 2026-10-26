@@ -2,6 +2,10 @@
 
 Base: `62050f61726f5f6401359efddf83e71b3c8f41aa`.
 
+The original delivery record below applies to
+`1c64c6b060bd5ca5be9e53f492690bcd56e6680d` and is retained as historical
+evidence. The final section records the subsequent merged-source pin update.
+
 Guide remains optional, read-only, citation-backed, and limited to its admitted
 public corpus. Broader business/site knowledge principles do not authorize
 private ingestion or new action tools. No model, prompt, training, scoring,
@@ -63,3 +67,32 @@ merge was performed. Existing measured baselines still belong to their original
 162-source corpus hash; these checks make no new model-quality claim. The
 coordinator owns review and the human merge gate, including the license-source
 dependency.
+
+## Merged-source pin update — October 26, 2026
+
+Org PR #16 is merged as `ad903228db64e95c7fa985857df562e9a580c6a8`.
+The two org manifest entries and their provenance links now use that merged
+revision. Their SHA-256 hashes, bytes, MIT scope, and all other source metadata
+are unchanged from the reviewed candidate; the other 162 pins are unchanged.
+The corpus documentation now records the resolved licensing dependency.
+
+Verification against the merged public source:
+
+- `VISION.md`: 8271 bytes; SHA-256
+  `aad06c8fc9ed30530acca53c0e6722476c52b3c215b13afc86220689110618bf`.
+- `ROADMAP.md`: 5990 bytes; SHA-256
+  `a2697aa45f9a2e638196e46cd513aedfe9bf438378a760b39de6502d5fd73f40`.
+- `npm test`: 48/48 passed. `npm run verify`: 164 sources passed.
+- Explicit `corpus sync --json` and `corpus verify --json` passed with provider
+  and embedding configuration unset. New corpus hash:
+  `2bc34f2be1c0d91d2e5ee2a1acf5ba466e67ae11bdfe379214107b45d32835b2`.
+- `git diff --check` passed. No changes to source admission scope, evaluator,
+  frozen cases, CLI, or tests in this follow-up.
+
+The readiness workflows were inspected: regular CI installs with
+`--ignore-scripts`, then runs tests and repository verification. Readiness also
+triggers the existing authorized native code-review publisher. No deployment,
+training, or Guide product inference job was found. No duplicate review dispatch
+is performed by this source update; the coordinator owns review adjudication.
+The earlier candidate-source evidence above remains historical, including its
+then-unresolved dependency and former corpus identity.
