@@ -1,0 +1,846 @@
+{
+  "evaluatedSourceHead": "ae8623c8eb8d52240ccd52df85d382f92e996a3d",
+  "baseSha": "62050f61726f5f6401359efddf83e71b3c8f41aa",
+  "corpusHash": "dc80b5fa494a7d7d2e90c2ae4e80cc512e217b837100e2101941e51d0ac5a501",
+  "sources": 162,
+  "chunks": 2138,
+  "embeddingModelIdentity": "qwen3-embedding",
+  "embeddingDimensions": 4096,
+  "embedElapsedMs": 220659,
+  "synthesisModelIdentity": "nemotron-3.5-super-vl",
+  "maxTokens": 1024,
+  "enableThinking": false,
+  "devSuiteElapsedMs": 419194,
+  "holdoutSuiteElapsedMs": 168226,
+  "consumer": "Local OpenAI-compatible loopback endpoints for qwen3-embedding and nemotron-3.5-super-vl; temporary loopback forwards closed immediately after evaluation.",
+  "runs": [
+    {
+      "artifact": "DEV_RETRIEVAL_BM25.json",
+      "suite": "dinkus-guide-dev-v4",
+      "suiteFile": "eval/cases.json",
+      "mode": "retrieval",
+      "retrieval": "fts5-bm25",
+      "passed": 30,
+      "total": 50,
+      "score": 0.6,
+      "sourceHits": 49,
+      "eligible": 50,
+      "sourceRecallAtK": 0.98,
+      "spanHits": 30,
+      "recallAtK": 0.6,
+      "failureBuckets": {
+        "retrieval_miss": 20,
+        "schema_error": 0,
+        "abstention_error": 0,
+        "citation_miss": 0,
+        "fact_miss": 0
+      },
+      "forbiddenClaims": 0,
+      "byCategory": {
+        "lookup": {
+          "passed": 10,
+          "total": 16,
+          "failureBuckets": {
+            "retrieval_miss": 6,
+            "schema_error": 0,
+            "abstention_error": 0,
+            "citation_miss": 0,
+            "fact_miss": 0
+          }
+        },
+        "workflow": {
+          "passed": 6,
+          "total": 14,
+          "failureBuckets": {
+            "retrieval_miss": 8,
+            "schema_error": 0,
+            "abstention_error": 0,
+            "citation_miss": 0,
+            "fact_miss": 0
+          }
+        },
+        "transition_trap": {
+          "passed": 5,
+          "total": 8,
+          "failureBuckets": {
+            "retrieval_miss": 3,
+            "schema_error": 0,
+            "abstention_error": 0,
+            "citation_miss": 0,
+            "fact_miss": 0
+          }
+        },
+        "cross_plugin": {
+          "passed": 9,
+          "total": 12,
+          "failureBuckets": {
+            "retrieval_miss": 3,
+            "schema_error": 0,
+            "abstention_error": 0,
+            "citation_miss": 0,
+            "fact_miss": 0
+          }
+        }
+      }
+    },
+    {
+      "artifact": "DEV_EXTRACTIVE_BM25.json",
+      "suite": "dinkus-guide-dev-v4",
+      "suiteFile": "eval/cases.json",
+      "mode": "extractive",
+      "retrieval": "fts5-bm25",
+      "passed": 41,
+      "total": 67,
+      "score": 0.6119402985074627,
+      "sourceHits": 49,
+      "eligible": 50,
+      "sourceRecallAtK": 0.98,
+      "spanHits": 30,
+      "recallAtK": 0.6,
+      "failureBuckets": {
+        "retrieval_miss": 1,
+        "schema_error": 0,
+        "abstention_error": 6,
+        "citation_miss": 0,
+        "fact_miss": 19
+      },
+      "forbiddenClaims": 0,
+      "byCategory": {
+        "lookup": {
+          "passed": 10,
+          "total": 16,
+          "failureBuckets": {
+            "retrieval_miss": 0,
+            "schema_error": 0,
+            "abstention_error": 0,
+            "citation_miss": 0,
+            "fact_miss": 6
+          }
+        },
+        "workflow": {
+          "passed": 6,
+          "total": 14,
+          "failureBuckets": {
+            "retrieval_miss": 0,
+            "schema_error": 0,
+            "abstention_error": 0,
+            "citation_miss": 0,
+            "fact_miss": 8
+          }
+        },
+        "transition_trap": {
+          "passed": 5,
+          "total": 8,
+          "failureBuckets": {
+            "retrieval_miss": 0,
+            "schema_error": 0,
+            "abstention_error": 0,
+            "citation_miss": 0,
+            "fact_miss": 3
+          }
+        },
+        "cross_plugin": {
+          "passed": 9,
+          "total": 12,
+          "failureBuckets": {
+            "retrieval_miss": 1,
+            "schema_error": 0,
+            "abstention_error": 0,
+            "citation_miss": 0,
+            "fact_miss": 2
+          }
+        },
+        "honest_abstention": {
+          "passed": 4,
+          "total": 9,
+          "failureBuckets": {
+            "retrieval_miss": 0,
+            "schema_error": 0,
+            "abstention_error": 5,
+            "citation_miss": 0,
+            "fact_miss": 0
+          }
+        },
+        "boundary_refusal": {
+          "passed": 7,
+          "total": 8,
+          "failureBuckets": {
+            "retrieval_miss": 0,
+            "schema_error": 0,
+            "abstention_error": 1,
+            "citation_miss": 0,
+            "fact_miss": 0
+          }
+        }
+      }
+    },
+    {
+      "artifact": "DEV_RETRIEVAL.json",
+      "suite": "dinkus-guide-dev-v4",
+      "suiteFile": "eval/cases.json",
+      "mode": "retrieval",
+      "retrieval": "fts5-bm25+qwen3-embedding-rrf",
+      "passed": 29,
+      "total": 50,
+      "score": 0.58,
+      "sourceHits": 50,
+      "eligible": 50,
+      "sourceRecallAtK": 1,
+      "spanHits": 29,
+      "recallAtK": 0.58,
+      "failureBuckets": {
+        "retrieval_miss": 21,
+        "schema_error": 0,
+        "abstention_error": 0,
+        "citation_miss": 0,
+        "fact_miss": 0
+      },
+      "forbiddenClaims": 0,
+      "byCategory": {
+        "lookup": {
+          "passed": 8,
+          "total": 16,
+          "failureBuckets": {
+            "retrieval_miss": 8,
+            "schema_error": 0,
+            "abstention_error": 0,
+            "citation_miss": 0,
+            "fact_miss": 0
+          }
+        },
+        "workflow": {
+          "passed": 7,
+          "total": 14,
+          "failureBuckets": {
+            "retrieval_miss": 7,
+            "schema_error": 0,
+            "abstention_error": 0,
+            "citation_miss": 0,
+            "fact_miss": 0
+          }
+        },
+        "transition_trap": {
+          "passed": 5,
+          "total": 8,
+          "failureBuckets": {
+            "retrieval_miss": 3,
+            "schema_error": 0,
+            "abstention_error": 0,
+            "citation_miss": 0,
+            "fact_miss": 0
+          }
+        },
+        "cross_plugin": {
+          "passed": 9,
+          "total": 12,
+          "failureBuckets": {
+            "retrieval_miss": 3,
+            "schema_error": 0,
+            "abstention_error": 0,
+            "citation_miss": 0,
+            "fact_miss": 0
+          }
+        }
+      }
+    },
+    {
+      "artifact": "DEV_EXTRACTIVE.json",
+      "suite": "dinkus-guide-dev-v4",
+      "suiteFile": "eval/cases.json",
+      "mode": "extractive",
+      "retrieval": "fts5-bm25+qwen3-embedding-rrf",
+      "passed": 42,
+      "total": 67,
+      "score": 0.6268656716417911,
+      "sourceHits": 50,
+      "eligible": 50,
+      "sourceRecallAtK": 1,
+      "spanHits": 29,
+      "recallAtK": 0.58,
+      "failureBuckets": {
+        "retrieval_miss": 0,
+        "schema_error": 0,
+        "abstention_error": 4,
+        "citation_miss": 0,
+        "fact_miss": 21
+      },
+      "forbiddenClaims": 0,
+      "byCategory": {
+        "lookup": {
+          "passed": 8,
+          "total": 16,
+          "failureBuckets": {
+            "retrieval_miss": 0,
+            "schema_error": 0,
+            "abstention_error": 0,
+            "citation_miss": 0,
+            "fact_miss": 8
+          }
+        },
+        "workflow": {
+          "passed": 7,
+          "total": 14,
+          "failureBuckets": {
+            "retrieval_miss": 0,
+            "schema_error": 0,
+            "abstention_error": 0,
+            "citation_miss": 0,
+            "fact_miss": 7
+          }
+        },
+        "transition_trap": {
+          "passed": 5,
+          "total": 8,
+          "failureBuckets": {
+            "retrieval_miss": 0,
+            "schema_error": 0,
+            "abstention_error": 0,
+            "citation_miss": 0,
+            "fact_miss": 3
+          }
+        },
+        "cross_plugin": {
+          "passed": 9,
+          "total": 12,
+          "failureBuckets": {
+            "retrieval_miss": 0,
+            "schema_error": 0,
+            "abstention_error": 0,
+            "citation_miss": 0,
+            "fact_miss": 3
+          }
+        },
+        "honest_abstention": {
+          "passed": 5,
+          "total": 9,
+          "failureBuckets": {
+            "retrieval_miss": 0,
+            "schema_error": 0,
+            "abstention_error": 4,
+            "citation_miss": 0,
+            "fact_miss": 0
+          }
+        },
+        "boundary_refusal": {
+          "passed": 8,
+          "total": 8,
+          "failureBuckets": {
+            "retrieval_miss": 0,
+            "schema_error": 0,
+            "abstention_error": 0,
+            "citation_miss": 0,
+            "fact_miss": 0
+          }
+        }
+      }
+    },
+    {
+      "artifact": "DEV_MODEL.json",
+      "suite": "dinkus-guide-dev-v4",
+      "suiteFile": "eval/cases.json",
+      "mode": "model",
+      "retrieval": "fts5-bm25+qwen3-embedding-rrf",
+      "modelIdentity": [
+        "nemotron-3.5-super-vl"
+      ],
+      "passed": 38,
+      "total": 67,
+      "score": 0.5671641791044776,
+      "sourceHits": 50,
+      "eligible": 50,
+      "sourceRecallAtK": 1,
+      "spanHits": 29,
+      "recallAtK": 0.58,
+      "failureBuckets": {
+        "retrieval_miss": 0,
+        "schema_error": 5,
+        "abstention_error": 1,
+        "citation_miss": 2,
+        "fact_miss": 21
+      },
+      "forbiddenClaims": 2,
+      "byCategory": {
+        "lookup": {
+          "passed": 8,
+          "total": 16,
+          "failureBuckets": {
+            "retrieval_miss": 0,
+            "schema_error": 2,
+            "abstention_error": 0,
+            "citation_miss": 0,
+            "fact_miss": 6
+          }
+        },
+        "workflow": {
+          "passed": 4,
+          "total": 14,
+          "failureBuckets": {
+            "retrieval_miss": 0,
+            "schema_error": 2,
+            "abstention_error": 1,
+            "citation_miss": 0,
+            "fact_miss": 7
+          }
+        },
+        "transition_trap": {
+          "passed": 4,
+          "total": 8,
+          "failureBuckets": {
+            "retrieval_miss": 0,
+            "schema_error": 0,
+            "abstention_error": 0,
+            "citation_miss": 0,
+            "fact_miss": 4
+          }
+        },
+        "cross_plugin": {
+          "passed": 6,
+          "total": 12,
+          "failureBuckets": {
+            "retrieval_miss": 0,
+            "schema_error": 0,
+            "abstention_error": 0,
+            "citation_miss": 2,
+            "fact_miss": 4
+          }
+        },
+        "honest_abstention": {
+          "passed": 8,
+          "total": 9,
+          "failureBuckets": {
+            "retrieval_miss": 0,
+            "schema_error": 1,
+            "abstention_error": 0,
+            "citation_miss": 0,
+            "fact_miss": 0
+          }
+        },
+        "boundary_refusal": {
+          "passed": 8,
+          "total": 8,
+          "failureBuckets": {
+            "retrieval_miss": 0,
+            "schema_error": 0,
+            "abstention_error": 0,
+            "citation_miss": 0,
+            "fact_miss": 0
+          }
+        }
+      }
+    },
+    {
+      "artifact": "HOLDOUT_RETRIEVAL_BM25.json",
+      "suite": "dinkus-guide-holdout-v4",
+      "suiteFile": "eval/holdout.json",
+      "mode": "retrieval",
+      "retrieval": "fts5-bm25",
+      "passed": 15,
+      "total": 22,
+      "score": 0.6818181818181818,
+      "sourceHits": 22,
+      "eligible": 22,
+      "sourceRecallAtK": 1,
+      "spanHits": 15,
+      "recallAtK": 0.6818181818181818,
+      "failureBuckets": {
+        "retrieval_miss": 7,
+        "schema_error": 0,
+        "abstention_error": 0,
+        "citation_miss": 0,
+        "fact_miss": 0
+      },
+      "forbiddenClaims": 0,
+      "byCategory": {
+        "lookup": {
+          "passed": 5,
+          "total": 7,
+          "failureBuckets": {
+            "retrieval_miss": 2,
+            "schema_error": 0,
+            "abstention_error": 0,
+            "citation_miss": 0,
+            "fact_miss": 0
+          }
+        },
+        "workflow": {
+          "passed": 5,
+          "total": 6,
+          "failureBuckets": {
+            "retrieval_miss": 1,
+            "schema_error": 0,
+            "abstention_error": 0,
+            "citation_miss": 0,
+            "fact_miss": 0
+          }
+        },
+        "transition_trap": {
+          "passed": 2,
+          "total": 4,
+          "failureBuckets": {
+            "retrieval_miss": 2,
+            "schema_error": 0,
+            "abstention_error": 0,
+            "citation_miss": 0,
+            "fact_miss": 0
+          }
+        },
+        "cross_plugin": {
+          "passed": 3,
+          "total": 5,
+          "failureBuckets": {
+            "retrieval_miss": 2,
+            "schema_error": 0,
+            "abstention_error": 0,
+            "citation_miss": 0,
+            "fact_miss": 0
+          }
+        }
+      }
+    },
+    {
+      "artifact": "HOLDOUT_EXTRACTIVE_BM25.json",
+      "suite": "dinkus-guide-holdout-v4",
+      "suiteFile": "eval/holdout.json",
+      "mode": "extractive",
+      "retrieval": "fts5-bm25",
+      "passed": 20,
+      "total": 29,
+      "score": 0.6896551724137931,
+      "sourceHits": 22,
+      "eligible": 22,
+      "sourceRecallAtK": 1,
+      "spanHits": 15,
+      "recallAtK": 0.6818181818181818,
+      "failureBuckets": {
+        "retrieval_miss": 0,
+        "schema_error": 0,
+        "abstention_error": 2,
+        "citation_miss": 0,
+        "fact_miss": 7
+      },
+      "forbiddenClaims": 0,
+      "byCategory": {
+        "lookup": {
+          "passed": 5,
+          "total": 7,
+          "failureBuckets": {
+            "retrieval_miss": 0,
+            "schema_error": 0,
+            "abstention_error": 0,
+            "citation_miss": 0,
+            "fact_miss": 2
+          }
+        },
+        "workflow": {
+          "passed": 5,
+          "total": 6,
+          "failureBuckets": {
+            "retrieval_miss": 0,
+            "schema_error": 0,
+            "abstention_error": 0,
+            "citation_miss": 0,
+            "fact_miss": 1
+          }
+        },
+        "transition_trap": {
+          "passed": 2,
+          "total": 4,
+          "failureBuckets": {
+            "retrieval_miss": 0,
+            "schema_error": 0,
+            "abstention_error": 0,
+            "citation_miss": 0,
+            "fact_miss": 2
+          }
+        },
+        "cross_plugin": {
+          "passed": 3,
+          "total": 5,
+          "failureBuckets": {
+            "retrieval_miss": 0,
+            "schema_error": 0,
+            "abstention_error": 0,
+            "citation_miss": 0,
+            "fact_miss": 2
+          }
+        },
+        "honest_abstention": {
+          "passed": 2,
+          "total": 4,
+          "failureBuckets": {
+            "retrieval_miss": 0,
+            "schema_error": 0,
+            "abstention_error": 2,
+            "citation_miss": 0,
+            "fact_miss": 0
+          }
+        },
+        "boundary_refusal": {
+          "passed": 3,
+          "total": 3,
+          "failureBuckets": {
+            "retrieval_miss": 0,
+            "schema_error": 0,
+            "abstention_error": 0,
+            "citation_miss": 0,
+            "fact_miss": 0
+          }
+        }
+      }
+    },
+    {
+      "artifact": "HOLDOUT_RETRIEVAL.json",
+      "suite": "dinkus-guide-holdout-v4",
+      "suiteFile": "eval/holdout.json",
+      "mode": "retrieval",
+      "retrieval": "fts5-bm25+qwen3-embedding-rrf",
+      "passed": 16,
+      "total": 22,
+      "score": 0.7272727272727273,
+      "sourceHits": 22,
+      "eligible": 22,
+      "sourceRecallAtK": 1,
+      "spanHits": 16,
+      "recallAtK": 0.7272727272727273,
+      "failureBuckets": {
+        "retrieval_miss": 6,
+        "schema_error": 0,
+        "abstention_error": 0,
+        "citation_miss": 0,
+        "fact_miss": 0
+      },
+      "forbiddenClaims": 0,
+      "byCategory": {
+        "lookup": {
+          "passed": 4,
+          "total": 7,
+          "failureBuckets": {
+            "retrieval_miss": 3,
+            "schema_error": 0,
+            "abstention_error": 0,
+            "citation_miss": 0,
+            "fact_miss": 0
+          }
+        },
+        "workflow": {
+          "passed": 6,
+          "total": 6,
+          "failureBuckets": {
+            "retrieval_miss": 0,
+            "schema_error": 0,
+            "abstention_error": 0,
+            "citation_miss": 0,
+            "fact_miss": 0
+          }
+        },
+        "transition_trap": {
+          "passed": 3,
+          "total": 4,
+          "failureBuckets": {
+            "retrieval_miss": 1,
+            "schema_error": 0,
+            "abstention_error": 0,
+            "citation_miss": 0,
+            "fact_miss": 0
+          }
+        },
+        "cross_plugin": {
+          "passed": 3,
+          "total": 5,
+          "failureBuckets": {
+            "retrieval_miss": 2,
+            "schema_error": 0,
+            "abstention_error": 0,
+            "citation_miss": 0,
+            "fact_miss": 0
+          }
+        }
+      }
+    },
+    {
+      "artifact": "HOLDOUT_EXTRACTIVE.json",
+      "suite": "dinkus-guide-holdout-v4",
+      "suiteFile": "eval/holdout.json",
+      "mode": "extractive",
+      "retrieval": "fts5-bm25+qwen3-embedding-rrf",
+      "passed": 21,
+      "total": 29,
+      "score": 0.7241379310344828,
+      "sourceHits": 22,
+      "eligible": 22,
+      "sourceRecallAtK": 1,
+      "spanHits": 16,
+      "recallAtK": 0.7272727272727273,
+      "failureBuckets": {
+        "retrieval_miss": 0,
+        "schema_error": 0,
+        "abstention_error": 2,
+        "citation_miss": 0,
+        "fact_miss": 6
+      },
+      "forbiddenClaims": 0,
+      "byCategory": {
+        "lookup": {
+          "passed": 4,
+          "total": 7,
+          "failureBuckets": {
+            "retrieval_miss": 0,
+            "schema_error": 0,
+            "abstention_error": 0,
+            "citation_miss": 0,
+            "fact_miss": 3
+          }
+        },
+        "workflow": {
+          "passed": 6,
+          "total": 6,
+          "failureBuckets": {
+            "retrieval_miss": 0,
+            "schema_error": 0,
+            "abstention_error": 0,
+            "citation_miss": 0,
+            "fact_miss": 0
+          }
+        },
+        "transition_trap": {
+          "passed": 3,
+          "total": 4,
+          "failureBuckets": {
+            "retrieval_miss": 0,
+            "schema_error": 0,
+            "abstention_error": 0,
+            "citation_miss": 0,
+            "fact_miss": 1
+          }
+        },
+        "cross_plugin": {
+          "passed": 3,
+          "total": 5,
+          "failureBuckets": {
+            "retrieval_miss": 0,
+            "schema_error": 0,
+            "abstention_error": 0,
+            "citation_miss": 0,
+            "fact_miss": 2
+          }
+        },
+        "honest_abstention": {
+          "passed": 2,
+          "total": 4,
+          "failureBuckets": {
+            "retrieval_miss": 0,
+            "schema_error": 0,
+            "abstention_error": 2,
+            "citation_miss": 0,
+            "fact_miss": 0
+          }
+        },
+        "boundary_refusal": {
+          "passed": 3,
+          "total": 3,
+          "failureBuckets": {
+            "retrieval_miss": 0,
+            "schema_error": 0,
+            "abstention_error": 0,
+            "citation_miss": 0,
+            "fact_miss": 0
+          }
+        }
+      }
+    },
+    {
+      "artifact": "HOLDOUT_MODEL.json",
+      "suite": "dinkus-guide-holdout-v4",
+      "suiteFile": "eval/holdout.json",
+      "mode": "model",
+      "retrieval": "fts5-bm25+qwen3-embedding-rrf",
+      "modelIdentity": [
+        "nemotron-3.5-super-vl"
+      ],
+      "passed": 21,
+      "total": 29,
+      "score": 0.7241379310344828,
+      "sourceHits": 22,
+      "eligible": 22,
+      "sourceRecallAtK": 1,
+      "spanHits": 16,
+      "recallAtK": 0.7272727272727273,
+      "failureBuckets": {
+        "retrieval_miss": 0,
+        "schema_error": 1,
+        "abstention_error": 0,
+        "citation_miss": 1,
+        "fact_miss": 6
+      },
+      "forbiddenClaims": 0,
+      "byCategory": {
+        "lookup": {
+          "passed": 4,
+          "total": 7,
+          "failureBuckets": {
+            "retrieval_miss": 0,
+            "schema_error": 1,
+            "abstention_error": 0,
+            "citation_miss": 0,
+            "fact_miss": 2
+          }
+        },
+        "workflow": {
+          "passed": 5,
+          "total": 6,
+          "failureBuckets": {
+            "retrieval_miss": 0,
+            "schema_error": 0,
+            "abstention_error": 0,
+            "citation_miss": 0,
+            "fact_miss": 1
+          }
+        },
+        "transition_trap": {
+          "passed": 3,
+          "total": 4,
+          "failureBuckets": {
+            "retrieval_miss": 0,
+            "schema_error": 0,
+            "abstention_error": 0,
+            "citation_miss": 0,
+            "fact_miss": 1
+          }
+        },
+        "cross_plugin": {
+          "passed": 2,
+          "total": 5,
+          "failureBuckets": {
+            "retrieval_miss": 0,
+            "schema_error": 0,
+            "abstention_error": 0,
+            "citation_miss": 1,
+            "fact_miss": 2
+          }
+        },
+        "honest_abstention": {
+          "passed": 4,
+          "total": 4,
+          "failureBuckets": {
+            "retrieval_miss": 0,
+            "schema_error": 0,
+            "abstention_error": 0,
+            "citation_miss": 0,
+            "fact_miss": 0
+          }
+        },
+        "boundary_refusal": {
+          "passed": 3,
+          "total": 3,
+          "failureBuckets": {
+            "retrieval_miss": 0,
+            "schema_error": 0,
+            "abstention_error": 0,
+            "citation_miss": 0,
+            "fact_miss": 0
+          }
+        }
+      }
+    }
+  ]
+}

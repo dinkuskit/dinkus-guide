@@ -1,2 +1,3 @@
-{"ts":"2026-10-26T17:30:26-04:00","event":"worktree_created","branch":"codex/rung2-eval-grader-20261026","base":"62050f61726f5f6401359efddf83e71b3c8f41aa"}
-{"ts":"2026-10-26T17:31:49-04:00","event":"baseline_verified_and_corpus_synced","sources":162,"corpus_hash":"dc80b5fa494a7d7d2e90c2ae4e80cc512e217b837100e2101941e51d0ac5a501"}
+{"ts":"2026-10-26T21:48:00Z","event":"worktree_created","base":"62050f61726f5f6401359efddf83e71b3c8f41aa","branch":"codex/rung2-eval-grader-20261026"}
+{"ts":"2026-10-26T22:02:22Z","event":"implementation_committed","sha":"ae8623c8eb8d52240ccd52df85d382f92e996a3d","tests":"53/53","devCases":67,"holdoutCases":29}
+{"ts":"2026-10-26T22:18:21Z","event":"live_baselines_completed","evaluatedSha":"ae8623c8eb8d52240ccd52df85d382f92e996a3d","devModel":"38/67","holdoutModel":"21/29","loopbackForwardsClosed":true}
