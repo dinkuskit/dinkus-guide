@@ -2,10 +2,11 @@
 
 Read-only, source-backed DinkusKit and EmDash guide with an independent
 evaluation runner. It reads only the immutable public MIT Markdown and MDX pins
-in `corpus/manifest.json` across the seven approved repositories
+in `corpus/manifest.json` across the seven approved product/API repositories
 (`dinkuskit/dinkuskit`, `dinkuskit/commerce`, `dinkuskit/payments`,
 `dinkuskit/inventory`, `dinkuskit/ship`, `dinkuskit/template-store`, and
-`emdash-cms/emdash`); raw snapshots and optional dense chunk embeddings are
+`emdash-cms/emdash`), plus the explicitly licensed `VISION.md` and `ROADMAP.md`
+context documents from `dinkuskit/.github`. Raw snapshots and optional dense chunk embeddings are
 stored only in the ignored `.cache/dinkus-guide/` directory.
 
 ## Quickstart
