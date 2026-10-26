@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { createHash } from "node:crypto";
 import { realpathSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
@@ -19,6 +20,16 @@ export const ALLOWED_CATEGORIES = new Set([
   "honest_abstention",
   "boundary_refusal"
 ]);
+
+export const APPROVED_EVAL_REPOSITORIES = [
+  "dinkuskit/dinkuskit",
+  "dinkuskit/commerce",
+  "dinkuskit/payments",
+  "dinkuskit/inventory",
+  "dinkuskit/ship",
+  "dinkuskit/template-store",
+  "emdash-cms/emdash"
+];
 
 export const FAILURE_BUCKETS = [
   "retrieval_miss",
@@ -41,6 +52,10 @@ function normalizeText(value) {
   return String(value ?? "").toLowerCase().replace(/\s+/g, " ").trim();
 }
 
+function sha256Text(value) {
+  return createHash("sha256").update(value, "utf8").digest("hex");
+}
+
 function emptyBucketCounts() {
   return {
     retrieval_miss: 0,
@@ -52,10 +67,22 @@ function emptyBucketCounts() {
 }
 
 function parseArgs(rawArgs = args) {
-  const values = { json: false, mode: "extractive", modeSet: false, k: 12, kSet: false, suite: null, suiteSet: false, command: null };
+  const values = {
+    json: false,
+    summaryOnly: false,
+    mode: "extractive",
+    modeSet: false,
+    k: 12,
+    kSet: false,
+    suite: null,
+    suiteSet: false,
+    checkDisjoint: [],
+    command: null
+  };
   for (let index = 0; index < rawArgs.length; index += 1) {
     const arg = rawArgs[index];
     if (arg === "--json") { if (values.json) throw new Error("duplicate --json"); values.json = true; continue; }
+    if (arg === "--summary-only") { if (values.summaryOnly) throw new Error("duplicate --summary-only"); values.summaryOnly = true; continue; }
     if (arg === "--mode") {
       if (values.modeSet || index + 1 >= rawArgs.length || rawArgs[index + 1].startsWith("-")) throw new Error("missing or duplicate --mode");
       values.modeSet = true; values.mode = rawArgs[++index]; continue;
@@ -74,6 +101,11 @@ function parseArgs(rawArgs = args) {
       values.suite = rawArgs[++index];
       continue;
     }
+    if (arg === "--check-disjoint") {
+      if (index + 1 >= rawArgs.length || rawArgs[index + 1].startsWith("-")) throw new Error("missing --check-disjoint path");
+      values.checkDisjoint.push(rawArgs[++index]);
+      continue;
+    }
     if (arg.startsWith("-")) throw new Error(`unknown option: ${arg}`);
     if (values.command) throw new Error(`unexpected argument: ${arg}`);
     values.command = arg;
@@ -81,15 +113,87 @@ function parseArgs(rawArgs = args) {
   return values;
 }
 
-function sanitizeSuiteLabel(resolvedPath) {
+function isInsideRoot(resolvedPath) {
   let target = resolvedPath;
   try { target = realpathSync(resolvedPath); } catch { /* ignore missing path before readFile */ }
   const rel = path.relative(root, target).replace(/\\/g, "/");
-  if (rel && !rel.startsWith("..") && !path.isAbsolute(rel)) return rel;
+  return Boolean(rel && !rel.startsWith("..") && !path.isAbsolute(rel)) ? rel : null;
+}
+
+function sanitizeSuiteLabel(resolvedPath, { redactExternal = false } = {}) {
+  const rel = isInsideRoot(resolvedPath);
+  if (rel) return rel;
+  if (redactExternal) return "<external-suite>";
+  let target = resolvedPath;
+  try { target = realpathSync(resolvedPath); } catch { /* ignore missing path before readFile */ }
   return path.basename(target);
 }
 
-export function validateSuite(suite, { manifestIds = null, requireCategories = false } = {}) {
+export function verifySuiteStratification(label, suite, {
+  minCases,
+  maxCases,
+  expectedRole,
+  sourceRepositories = null,
+  requiredRepositories = APPROVED_EVAL_REPOSITORIES
+} = {}) {
+  if (expectedRole && suite.role !== expectedRole) {
+    throw new Error(`${label} must declare role="${expectedRole}"`);
+  }
+  if (minCases !== undefined && maxCases !== undefined) {
+    if (suite.cases.length < minCases || suite.cases.length > maxCases) {
+      throw new Error(`${label} must contain ${minCases}-${maxCases} cases (got ${suite.cases.length})`);
+    }
+  }
+  if (suite.role === "locked_promotion_exam") {
+    if (typeof suite.policy !== "string" || !/Rung 3/i.test(suite.policy) || !/Rung 4/i.test(suite.policy)) {
+      throw new Error(`${label} must declare its Rung 3 / Rung 4 locked promotion exam policy`);
+    }
+  }
+  const categories = new Set(suite.cases.map((item) => item.category));
+  for (const cat of ALLOWED_CATEGORIES) {
+    if (!categories.has(cat)) {
+      throw new Error(`${label} is missing required category: ${cat}`);
+    }
+  }
+  if (sourceRepositories) {
+    const coveredRepos = new Set();
+    for (const item of suite.cases) {
+      for (const src of [...(item.sources ?? []), ...(item.anyOfSources ?? []).flat()]) {
+        const entry = sourceRepositories.get(src);
+        const repo = typeof entry === "string" ? entry : entry?.repository;
+        if (repo) coveredRepos.add(repo);
+      }
+    }
+    for (const repo of requiredRepositories) {
+      if (!coveredRepos.has(repo)) {
+        throw new Error(`${label} is missing repository coverage for ${repo}`);
+      }
+    }
+  }
+  return true;
+}
+
+export function assertSuitesDisjoint(primarySuite, referenceSuite, {
+  primaryLabel = primarySuite?.suite ?? "primary",
+  referenceLabel = referenceSuite?.suite ?? "reference"
+} = {}) {
+  if (!primarySuite?.cases || !referenceSuite?.cases) {
+    throw new Error("both suites must provide cases arrays for disjointness verification");
+  }
+  const refIds = new Set(referenceSuite.cases.map((item) => item.id));
+  const refQuestions = new Set(referenceSuite.cases.map((item) => normalizeText(item.question)));
+  for (const item of primarySuite.cases) {
+    if (refIds.has(item.id)) {
+      throw new Error(`duplicate case id across ${primaryLabel} and ${referenceLabel}: ${item.id}`);
+    }
+    if (refQuestions.has(normalizeText(item.question))) {
+      throw new Error(`duplicate question across ${primaryLabel} and ${referenceLabel}: ${item.id}`);
+    }
+  }
+  return true;
+}
+
+export function validateSuite(suite, { manifestIds = null, sourceRepositories = null, requireCategories = false } = {}) {
   if (!suite || typeof suite !== "object" || Array.isArray(suite)) {
     throw new Error("evaluation suite must be a JSON object");
   }
@@ -102,7 +206,7 @@ export function validateSuite(suite, { manifestIds = null, requireCategories = f
   if (!Array.isArray(suite.cases) || !suite.cases.length) {
     throw new Error("evaluation suite requires a non-empty cases array");
   }
-  const enforceV4 = requireCategories || suite.version >= 4;
+  const enforceV4 = requireCategories || suite.version >= 4 || suite.role === "locked_promotion_exam";
   const seenIds = new Set();
   const seenQuestions = new Set();
 
@@ -184,6 +288,15 @@ export function validateSuite(suite, { manifestIds = null, requireCategories = f
         }
       }
     }
+  }
+
+  if (suite.role === "locked_promotion_exam") {
+    verifySuiteStratification(suite.suite, suite, {
+      minCases: 25,
+      maxCases: 30,
+      expectedRole: "locked_promotion_exam",
+      sourceRepositories
+    });
   }
   return suite;
 }
@@ -471,6 +584,12 @@ export function summarizeSuiteResults(cases, results, corpusSources = null) {
   };
 }
 
+function formatRecallForOutput(recall, summaryOnly) {
+  if (!summaryOnly) return recall;
+  const { cases: _omitted, ...aggregateRecall } = recall;
+  return aggregateRecall;
+}
+
 if (isMainModule()) {
   const jsonOutput = args.includes("--json");
   const failUsage = (message) => {
@@ -481,7 +600,10 @@ if (isMainModule()) {
   let options;
   try { options = parseArgs(); } catch (error) { failUsage(error.message); }
   if (!args.length) {
-    console.log("Usage: dinkus-guide-eval run [--suite eval/cases.json] [--json] [--mode extractive|model|retrieval|recall] [--k 12]");
+    console.log(
+      "Usage: dinkus-guide-eval run [--suite eval/cases.json] [--check-disjoint eval/cases.json] " +
+      "[--summary-only] [--json] [--mode extractive|model|retrieval|recall] [--k 12]"
+    );
     process.exit(0);
   }
   if (options.command === null) failUsage("expected command: run");
@@ -493,7 +615,7 @@ if (isMainModule()) {
   const suitePath = options.suite
     ? path.resolve(process.cwd(), options.suite)
     : path.join(root, "eval", "cases.json");
-  const suiteFile = sanitizeSuiteLabel(suitePath);
+  const suiteFile = sanitizeSuiteLabel(suitePath, { redactExternal: options.summaryOnly });
 
   let rawSuiteText;
   try {
@@ -501,6 +623,8 @@ if (isMainModule()) {
   } catch (error) {
     failUsage(`invalid suite (${suiteFile}): ${error?.code === "ENOENT" ? "suite file not found" : "unable to read suite file"}`);
   }
+  const suiteSha256 = sha256Text(rawSuiteText);
+
   let suite;
   try {
     let parsedSuite;
@@ -510,12 +634,42 @@ if (isMainModule()) {
     failUsage(`invalid suite (${suiteFile}): ${error.message}`);
   }
 
+  const disjointFrom = [];
+  for (const rawRef of options.checkDisjoint) {
+    const refPath = path.resolve(process.cwd(), rawRef);
+    const refLabel = sanitizeSuiteLabel(refPath, { redactExternal: options.summaryOnly });
+    let rawRefText;
+    try {
+      rawRefText = await readFile(refPath, "utf8");
+    } catch (error) {
+      failUsage(`invalid disjoint reference (${refLabel}): ${error?.code === "ENOENT" ? "suite file not found" : "unable to read suite file"}`);
+    }
+    try {
+      let parsedRef;
+      try { parsedRef = JSON.parse(rawRefText); } catch { throw new Error("suite is not valid JSON"); }
+      const refSuite = validateSuite(parsedRef);
+      assertSuitesDisjoint(suite, refSuite, { primaryLabel: suite.suite, referenceLabel: refSuite.suite });
+      disjointFrom.push({
+        suite: refSuite.suite,
+        suiteFile: refLabel,
+        suiteSha256: sha256Text(rawRefText),
+        cases: refSuite.cases.length
+      });
+    } catch (error) {
+      failUsage(`disjointness check failed (${refLabel}): ${error.message}`);
+    }
+  }
+
   const corpusRun = await runCli(["corpus", "verify", "--json"]);
   if (corpusRun.code !== 0) {
     const report = {
       suite: suite.suite,
       suiteFile,
       suiteVersion: suite.version,
+      suiteSha256,
+      ...(suite.role ? { suiteRole: suite.role } : {}),
+      ...(options.summaryOnly ? { summaryOnly: true } : {}),
+      ...(disjointFrom.length ? { disjointFrom } : {}),
       mode: options.mode,
       availability: "unavailable",
       reason: corpusRun.value.error || corpusRun.stderr,
@@ -523,7 +677,7 @@ if (isMainModule()) {
       passed: 0,
       failed: 0,
       score: null,
-      results: []
+      ...(options.summaryOnly ? {} : { results: [] })
     };
     console.log(options.json ? JSON.stringify(report) : `unavailable: ${report.reason}`);
     process.exit(2);
@@ -531,7 +685,10 @@ if (isMainModule()) {
 
   const corpusSources = await loadCorpusSources(root);
   try {
-    validateSuite(suite, { manifestIds: new Set(corpusSources.keys()) });
+    validateSuite(suite, {
+      manifestIds: new Set(corpusSources.keys()),
+      sourceRepositories: corpusSources
+    });
   } catch (error) {
     failUsage(`invalid suite (${suiteFile}): ${error.message}`);
   }
@@ -547,6 +704,10 @@ if (isMainModule()) {
         suite: suite.suite,
         suiteFile,
         suiteVersion: suite.version,
+        suiteSha256,
+        ...(suite.role ? { suiteRole: suite.role } : {}),
+        ...(options.summaryOnly ? { summaryOnly: true } : {}),
+        ...(disjointFrom.length ? { disjointFrom } : {}),
         mode: options.mode,
         availability: "unavailable",
         reason: run.value.error,
@@ -554,7 +715,7 @@ if (isMainModule()) {
         passed: 0,
         failed: 0,
         score: null,
-        results: []
+        ...(options.summaryOnly ? {} : { results: [] })
       };
       console.log(options.json ? JSON.stringify(report) : `unavailable: ${report.reason}`);
       process.exit(2);
@@ -590,6 +751,10 @@ if (isMainModule()) {
       suite: suite.suite,
       suiteFile,
       suiteVersion: suite.version,
+      suiteSha256,
+      ...(suite.role ? { suiteRole: suite.role } : {}),
+      ...(options.summaryOnly ? { summaryOnly: true } : {}),
+      ...(disjointFrom.length ? { disjointFrom } : {}),
       mode: options.mode,
       availability: "available",
       corpusHash: corpusRun.value.corpusHash ?? null,
@@ -601,8 +766,8 @@ if (isMainModule()) {
       forbiddenClaims: 0,
       byCategory: summary.byCategory,
       byLayer: summary.byLayer,
-      recall,
-      results: recall.cases
+      recall: formatRecallForOutput(recall, options.summaryOnly),
+      ...(options.summaryOnly ? {} : { results: recall.cases })
     };
     if (options.json) console.log(JSON.stringify(report));
     process.exit(recall.hits === recall.eligible ? 0 : 1);
@@ -625,15 +790,19 @@ if (isMainModule()) {
           suite: suite.suite,
           suiteFile,
           suiteVersion: suite.version,
+          suiteSha256,
+          ...(suite.role ? { suiteRole: suite.role } : {}),
+          ...(options.summaryOnly ? { summaryOnly: true } : {}),
+          ...(disjointFrom.length ? { disjointFrom } : {}),
           mode: options.mode,
           availability: "unavailable",
           reason: value.error,
-          recall,
+          recall: formatRecallForOutput(recall, options.summaryOnly),
           total: suite.cases.length,
           passed: 0,
           failed: 0,
           score: null,
-          results: []
+          ...(options.summaryOnly ? {} : { results: [] })
         };
         console.log(options.json ? JSON.stringify(report) : `unavailable: ${report.reason}`);
         process.exit(2);
@@ -654,11 +823,15 @@ if (isMainModule()) {
     suite: suite.suite,
     suiteFile,
     suiteVersion: suite.version,
+    suiteSha256,
+    ...(suite.role ? { suiteRole: suite.role } : {}),
+    ...(options.summaryOnly ? { summaryOnly: true } : {}),
+    ...(disjointFrom.length ? { disjointFrom } : {}),
     mode: options.mode,
     availability: "available",
     modelIdentity: options.mode === "model" ? [...modelIdentities] : undefined,
     corpusHash: corpusRun.value.corpusHash ?? null,
-    recall,
+    recall: formatRecallForOutput(recall, options.summaryOnly),
     total: summary.total,
     passed: summary.passed,
     failed: summary.failed,
@@ -668,7 +841,7 @@ if (isMainModule()) {
     subscores,
     byCategory: summary.byCategory,
     byLayer: summary.byLayer,
-    results
+    ...(options.summaryOnly ? {} : { results })
   };
   if (options.json) {
     console.log(JSON.stringify(report));

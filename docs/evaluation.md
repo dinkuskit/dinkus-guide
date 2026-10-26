@@ -1,19 +1,26 @@
 # Evaluation
 
-Evaluation separates iterative development from promotion testing across two
-disjoint v4 suites verified by `npm run verify`:
+Evaluation separates public iterative development from isolated promotion
+testing across two disjoint v4 suites:
 
-- **Development suite (`eval/cases.json`, `dinkus-guide-dev-v4`, `role: "development"`)**:
-  67 multi-fact developer and operator cases across all 7 approved public
-  repositories.
-- **Holdout suite (`eval/holdout.json`, `dinkus-guide-holdout-v4`, `role: "locked_promotion_exam"`)**:
-  29 unseen cases stratified across the exact same 6 categories and 7
-  repositories. **`eval/holdout.json` is the locked promotion exam**: Rung 3
-  prompt/harness optimizers and Rung 4 LoRA training data generators are
-  strictly forbidden from reading, indexing, or tuning against
-  `eval/holdout.json`. Automated verification enforces zero duplicate case IDs
-  and zero duplicate normalized question strings between `eval/cases.json` and
-  `eval/holdout.json`.
+- **Public development suite (`eval/cases.json`, `dinkus-guide-dev-v4`, `role: "development"`)**:
+  75 multi-fact developer and operator cases across all 7 approved public
+  repositories. Ordinary verification (`npm test` and `npm run verify`) checks
+  `eval/cases.json` without requiring holdout access and fails closed if any
+  holdout or extra suite JSON is placed under `eval/`.
+- **External locked promotion exam (`dinkus-guide-holdout-v4`, `role: "locked_promotion_exam"`)**:
+  25–30 unseen cases stored outside the public repository in owner-controlled
+  storage unavailable to optimization workers (including through network
+  access), stratified across the exact same 6 categories and 7 repositories.
+  **Strict promotion-exam lock**: Rung 3 prompt/harness optimizers and Rung 4
+  LoRA training data generators are strictly forbidden from mounting, reading,
+  indexing, or tuning against the external holdout suite. At evaluation time,
+  `validateSuite` enforces 25–30 cases, category/repository stratification, and
+  explicit Rung 3 / Rung 4 policy metadata for `role: "locked_promotion_exam"`,
+  `--check-disjoint eval/cases.json` enforces zero duplicate case IDs or
+  normalized question strings, and `--summary-only` emits aggregate scores,
+  buckets, and `suiteSha256` without exposing unseen case IDs, questions, or
+  gold expectations.
 
 ## Question categories & core guardrails
 
@@ -44,9 +51,11 @@ Every v4 case declares a `category`:
 ./bin/dinkus-guide-eval run --suite eval/cases.json --mode retrieval --k 12 --json
 ./bin/dinkus-guide-eval run --suite eval/cases.json --mode extractive --json
 ./bin/dinkus-guide-eval run --suite eval/cases.json --mode model --json
-./bin/dinkus-guide-eval run --suite eval/holdout.json --mode retrieval --k 12 --json
-./bin/dinkus-guide-eval run --suite eval/holdout.json --mode extractive --json
-./bin/dinkus-guide-eval run --suite eval/holdout.json --mode model --json
+
+# Owner-only promotion runs against an external unseen holdout suite:
+./bin/dinkus-guide-eval run --suite "$DINKUS_GUIDE_HOLDOUT_SUITE" --check-disjoint eval/cases.json --summary-only --mode retrieval --k 12 --json
+./bin/dinkus-guide-eval run --suite "$DINKUS_GUIDE_HOLDOUT_SUITE" --check-disjoint eval/cases.json --summary-only --mode extractive --json
+./bin/dinkus-guide-eval run --suite "$DINKUS_GUIDE_HOLDOUT_SUITE" --check-disjoint eval/cases.json --summary-only --mode model --json
 ```
 
 `--mode recall` remains supported as a backward-compatible alias for
@@ -90,6 +99,6 @@ imports ranking or answer functions from `src/`.
 Missing or unreachable model or embedding endpoints are reported as
 `unavailable` with a null score, never as a zero-quality model result. Any
 real-model or hybrid embedding run records the actual returned provider model
-identity separately from requested configuration, the corpus hash, tested commit
-SHA, commands, and limits, without storing credentials, private hostnames/IPs,
-or raw provider transcripts.
+identity separately from requested configuration, the corpus hash, `suiteSha256`,
+tested commit SHA, commands, and limits, without storing credentials, private
+hostnames/IPs, unseen holdout questions, or raw provider transcripts.

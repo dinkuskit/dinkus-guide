@@ -7,7 +7,7 @@ dinkus-guide corpus sync [--json]
 dinkus-guide corpus embed [--json]
 dinkus-guide corpus verify [--json]
 dinkus-guide ask QUESTION [--json] [--mode extractive|model] [--limit 12]
-dinkus-guide-eval run [--suite eval/cases.json] [--json] [--mode extractive|model|retrieval|recall] [--k 12]
+dinkus-guide-eval run [--suite eval/cases.json] [--check-disjoint eval/cases.json] [--summary-only] [--json] [--mode extractive|model|retrieval|recall] [--k 12]
 ```
 
 `sync` and `embed` are the only commands that write to disk
@@ -45,6 +45,13 @@ Requests enforce timeouts, bounded response sizes, and redirect refusal. Set
 `DINKUS_GUIDE_NO_THINK=1` only for a local provider that exposes the optional
 Super VL no-think control. Provider errors, malformed JSON, tool calls, and
 forged citations fail honestly; there is no silent fallback.
+
+`dinkus-guide-eval run` records `suiteSha256` on every report, supports
+repeatable `--check-disjoint <suite-path>` checks to enforce zero duplicate IDs
+or normalized questions against public development suites, and supports
+`--summary-only` to omit per-case `results` and `recall.cases` (and redact
+external `--suite` file paths to `<external-suite>`) when publishing aggregate
+promotion-holdout receipts.
 
 Exit codes: `0` success, `2` usage error, `3` missing/invalid/stale corpus or
 embeddings cache, `4` model or embedding provider/output error (`dinkus-guide-eval`

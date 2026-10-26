@@ -61,9 +61,10 @@ interpret source instructions, use arbitrary URLs, inspect screenshots, access
 private information, edit repositories, or send messages.
 
 `bin/dinkus-guide-eval` is separate: it spawns the public `dinkus-guide`
-executable, evaluates `eval/cases.json` (67-case development suite) or
-`--suite eval/holdout.json` (29-case locked promotion exam off-limits to Rung 3
-optimizers and Rung 4 LoRA data generators), verifies cited line spans directly
-against cached on-disk source snapshots, and classifies failures into five
-diagnostic buckets (`retrieval_miss`, `schema_error`, `abstention_error`,
-`citation_miss`, `fact_miss`).
+executable, evaluates `eval/cases.json` (75-case public development suite) or an
+external unseen promotion holdout via `--suite` (`--check-disjoint
+eval/cases.json --summary-only`, off-limits to Rung 3 optimizers and Rung 4 LoRA
+data generators), verifies cited line spans directly against cached on-disk
+source snapshots, and classifies failures into five diagnostic buckets
+(`retrieval_miss`, `schema_error`, `abstention_error`, `citation_miss`,
+`fact_miss`).

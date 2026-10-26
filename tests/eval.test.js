@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { copyFile, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdtemp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import http from "node:http";
 import { spawn } from "node:child_process";
 import os from "node:os";
@@ -10,6 +10,7 @@ import { APPROVED_REPOSITORIES, loadManifest, root } from "../src/corpus.js";
 import {
   ALLOWED_CATEGORIES,
   FAILURE_BUCKETS,
+  assertSuitesDisjoint,
   computeRecallCase,
   loadCorpusSources,
   scoreGuideRun,
@@ -18,47 +19,31 @@ import {
   verifyCitationSpan
 } from "../bin/dinkus-guide-eval";
 
-function normalizeText(value) {
-  return String(value ?? "").toLowerCase().replace(/\s+/g, " ").trim();
-}
-
-test("dev and holdout suites satisfy schema, disjointness, category/repo stratification, and promotion-exam lock", async () => {
+test("public dev suite satisfies schema, stratification, guardrails, and holdout-free public repo boundary", async () => {
   const manifest = await loadManifest();
   const manifestIds = new Set(manifest.sources.map((s) => s.id));
   const sourceById = new Map(manifest.sources.map((s) => [s.id, s]));
 
-  const devRaw = JSON.parse(await readFile(path.join(root, "eval", "cases.json"), "utf8"));
-  const holdoutRaw = JSON.parse(await readFile(path.join(root, "eval", "holdout.json"), "utf8"));
+  // Public eval/ directory must contain only cases.json so Rung 3/4 workspaces verify without holdout access
+  const evalEntries = await readdir(path.join(root, "eval"));
+  assert.deepEqual(evalEntries, ["cases.json"]);
 
-  const dev = validateSuite(devRaw, { manifestIds, requireCategories: true });
-  const holdout = validateSuite(holdoutRaw, { manifestIds, requireCategories: true });
+  const devRaw = JSON.parse(await readFile(path.join(root, "eval", "cases.json"), "utf8"));
+  const dev = validateSuite(devRaw, { manifestIds, sourceRepositories: sourceById, requireCategories: true });
 
   assert.equal(dev.role, "development");
   assert.ok(dev.cases.length >= 60 && dev.cases.length <= 75, `expected 60-75 dev cases, got ${dev.cases.length}`);
-  assert.equal(holdout.role, "locked_promotion_exam");
-  assert.ok(holdout.cases.length >= 25 && holdout.cases.length <= 30, `expected 25-30 holdout cases, got ${holdout.cases.length}`);
-  assert.match(holdout.policy, /Rung 3/i);
-  assert.match(holdout.policy, /Rung 4/i);
 
-  const devIds = new Set(dev.cases.map((c) => c.id));
-  const devQuestions = new Set(dev.cases.map((c) => normalizeText(c.question)));
-  for (const item of holdout.cases) {
-    assert.equal(devIds.has(item.id), false, `duplicate id across dev and holdout: ${item.id}`);
-    assert.equal(devQuestions.has(normalizeText(item.question)), false, `duplicate question across dev and holdout: ${item.id}`);
+  const categories = new Set(dev.cases.map((c) => c.category));
+  assert.deepEqual(categories, ALLOWED_CATEGORIES, "dev missing required categories");
+  const repos = new Set();
+  for (const c of dev.cases) {
+    for (const src of [...(c.sources ?? []), ...(c.anyOfSources ?? []).flat()]) {
+      repos.add(sourceById.get(src)?.repository);
+    }
   }
-
-  for (const [label, suite] of [["dev", dev], ["holdout", holdout]]) {
-    const categories = new Set(suite.cases.map((c) => c.category));
-    assert.deepEqual(categories, ALLOWED_CATEGORIES, `${label} missing required categories`);
-    const repos = new Set();
-    for (const c of suite.cases) {
-      for (const src of [...(c.sources ?? []), ...(c.anyOfSources ?? []).flat()]) {
-        repos.add(sourceById.get(src)?.repository);
-      }
-    }
-    for (const repo of APPROVED_REPOSITORIES) {
-      assert.equal(repos.has(repo), true, `${label} missing repository ${repo}`);
-    }
+  for (const repo of APPROVED_REPOSITORIES) {
+    assert.equal(repos.has(repo), true, `dev missing repository ${repo}`);
   }
 
   // Core-principle guardrails: unbuilt standalone Payments direction, transition traps, and dinkus-guide boundary
@@ -79,18 +64,97 @@ test("dev and holdout suites satisfy schema, disjointness, category/repo stratif
     c.abstain === true && /dinkus-?guide/i.test(c.question)
   ));
 
-  // Holdout lock documentation + evaluator separation check
+  // External holdout lock documentation + evaluator separation check
   const readme = await readFile(path.join(root, "README.md"), "utf8");
   const evalDoc = await readFile(path.join(root, "docs", "evaluation.md"), "utf8");
-  assert.match(readme, /eval\/holdout\.json/);
+  assert.match(readme, /DINKUS_GUIDE_HOLDOUT_SUITE/);
   assert.match(readme, /Rung 3/);
   assert.match(readme, /Rung 4/);
-  assert.match(evalDoc, /eval\/holdout\.json/);
+  assert.match(evalDoc, /locked_promotion_exam/);
   assert.match(evalDoc, /Rung 3/);
   assert.match(evalDoc, /Rung 4/);
 
   const evalBinSource = await readFile(path.join(root, "bin", "dinkus-guide-eval"), "utf8");
   assert.doesNotMatch(evalBinSource, /from\s+["']\.\.\/src\//);
+});
+
+test("external locked_promotion_exam validation and assertSuitesDisjoint enforce 25-30 cases, repo stratification, policy, and zero overlap", async () => {
+  const manifest = await loadManifest();
+  const manifestIds = new Set(manifest.sources.map((s) => s.id));
+  const sourceById = new Map(manifest.sources.map((s) => [s.id, s]));
+  const devSuite = JSON.parse(await readFile(path.join(root, "eval", "cases.json"), "utf8"));
+
+  // Pick one manifest source per approved repository for synthetic stratification checks
+  const oneSourcePerRepo = [];
+  for (const repo of APPROVED_REPOSITORIES) {
+    const found = manifest.sources.find((s) => s.repository === repo);
+    assert.ok(found, `expected source for ${repo}`);
+    oneSourcePerRepo.push(found.id);
+  }
+
+  const syntheticHoldoutCases = [];
+  const categories = [...ALLOWED_CATEGORIES];
+  for (let i = 0; i < 26; i += 1) {
+    const category = categories[i % categories.length];
+    const abstain = category === "honest_abstention" || category === "boundary_refusal";
+    syntheticHoldoutCases.push({
+      id: `synth-holdout-${i + 1}`,
+      category,
+      question: `Synthetic unseen promotion question number ${i + 1}?`,
+      abstain,
+      expectedStatus: abstain ? "insufficient_evidence" : "answered",
+      facts: abstain ? [] : ["alpha", "beta"],
+      sources: abstain ? [] : [oneSourcePerRepo[i % oneSourcePerRepo.length]]
+    });
+  }
+
+  const validHoldout = {
+    version: 4,
+    suite: "synthetic-holdout-v4",
+    role: "locked_promotion_exam",
+    policy: "Rung 3 optimizers and Rung 4 LoRA generators must never access this external exam.",
+    cases: syntheticHoldoutCases
+  };
+
+  assert.doesNotThrow(() => validateSuite(validHoldout, { manifestIds, sourceRepositories: sourceById }));
+  assert.equal(assertSuitesDisjoint(validHoldout, devSuite), true);
+
+  // Reject under-sized promotion exam (< 25 cases)
+  assert.throws(
+    () => validateSuite({ ...validHoldout, cases: syntheticHoldoutCases.slice(0, 10) }, { manifestIds, sourceRepositories: sourceById }),
+    /must contain 25-30 cases/
+  );
+
+  // Reject missing Rung 3 / Rung 4 policy text
+  assert.throws(
+    () => validateSuite({ ...validHoldout, policy: "do not read" }, { manifestIds, sourceRepositories: sourceById }),
+    /Rung 3 \/ Rung 4/
+  );
+
+  // Reject missing repository coverage
+  const singleRepoCases = syntheticHoldoutCases.map((c) => (c.abstain ? c : { ...c, sources: [oneSourcePerRepo[0]] }));
+  assert.throws(
+    () => validateSuite({ ...validHoldout, cases: singleRepoCases }, { manifestIds, sourceRepositories: sourceById }),
+    /missing repository coverage/
+  );
+
+  // Reject duplicate ID across suites
+  assert.throws(
+    () => assertSuitesDisjoint(
+      { ...validHoldout, cases: [{ ...syntheticHoldoutCases[0], id: devSuite.cases[0].id }] },
+      devSuite
+    ),
+    /duplicate case id/
+  );
+
+  // Reject duplicate normalized question across suites (case + whitespace insensitive)
+  assert.throws(
+    () => assertSuitesDisjoint(
+      { ...validHoldout, cases: [{ ...syntheticHoldoutCases[0], question: `  ${devSuite.cases[0].question.toUpperCase()}  ` }] },
+      devSuite
+    ),
+    /duplicate question/
+  );
 });
 
 test("flexible citation scoring supports mandatory sources and anyOfSources groups in recall and run grading", () => {
@@ -371,8 +435,9 @@ test("all 5 failure buckets classify deterministically and aggregate across cate
   assert.equal(summary.byCategory.workflow.failureBuckets.schema_error, 1);
 });
 
-test("CLI supports corpus embed, --suite, --mode retrieval, sanitized suiteFile, and end-to-end schema_error bucketing", async () => {
+test("CLI supports corpus embed, external --suite, --check-disjoint, --summary-only redaction, and schema_error bucketing", async () => {
   const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "dinkus-guide-rung2-cli-"));
+  const externalHoldoutDir = await mkdtemp(path.join(os.tmpdir(), "dinkus-guide-rung2-ext-"));
   const server = http.createServer(async (req, res) => {
     let body = "";
     for await (const chunk of req) body += chunk;
@@ -456,13 +521,29 @@ test("CLI supports corpus embed, --suite, --mode retrieval, sanitized suiteFile,
     }
     await writeFile(path.join(temporaryRoot, "corpus", "manifest.json"), JSON.stringify({ version: 1, sources }));
 
-    const customSuitePath = path.join(temporaryRoot, "eval", "custom-holdout.json");
-    await writeFile(customSuitePath, JSON.stringify({
+    const devSuitePath = path.join(temporaryRoot, "eval", "cases.json");
+    await writeFile(devSuitePath, JSON.stringify({
+      version: 4,
+      suite: "mini-dev-v4",
+      cases: [
+        {
+          id: "dev-store-3",
+          category: "workflow",
+          question: "How do I launch local template store 3?",
+          abstain: false,
+          facts: ["pnpm dev", "template store 3"],
+          sources: ["doc-03"]
+        }
+      ]
+    }));
+
+    const externalSuitePath = path.join(externalHoldoutDir, "secret-promotion-exam.json");
+    const externalSuiteRaw = JSON.stringify({
       version: 4,
       suite: "custom-holdout-v4",
       cases: [
         {
-          id: "pb-lookup",
+          id: "secret-pb-lookup-id",
           category: "lookup",
           question: "What header does Pitney Bowes tracking webhook use?",
           abstain: false,
@@ -470,7 +551,7 @@ test("CLI supports corpus embed, --suite, --mode retrieval, sanitized suiteFile,
           anyOfSources: [["doc-01", "doc-02"]]
         },
         {
-          id: "malformed-model-case",
+          id: "secret-malformed-model-case-id",
           category: "workflow",
           question: "How do I launch local template store 2?",
           abstain: false,
@@ -478,7 +559,9 @@ test("CLI supports corpus embed, --suite, --mode retrieval, sanitized suiteFile,
           sources: ["doc-02"]
         }
       ]
-    }));
+    });
+    const expectedExternalSha = createHash("sha256").update(externalSuiteRaw, "utf8").digest("hex");
+    await writeFile(externalSuitePath, externalSuiteRaw);
 
     const runBin = (binName, cliArgs, extraEnv = {}) => new Promise((resolve) => {
       const child = spawn(process.execPath, [path.join(temporaryRoot, "bin", binName), ...cliArgs], {
@@ -488,7 +571,7 @@ test("CLI supports corpus embed, --suite, --mode retrieval, sanitized suiteFile,
       let stdout = "", stderr = "";
       child.stdout.on("data", (chunk) => { stdout += chunk; });
       child.stderr.on("data", (chunk) => { stderr += chunk; });
-      child.on("close", (code) => resolve({ code, stderr, value: stdout ? JSON.parse(stdout) : null }));
+      child.on("close", (code) => resolve({ code, stdout, stderr, value: stdout ? JSON.parse(stdout) : null }));
     });
 
     // corpus embed without DINKUS_GUIDE_EMBED_BASE_URL fails closed with exit 4
@@ -509,21 +592,36 @@ test("CLI supports corpus embed, --suite, --mode retrieval, sanitized suiteFile,
     const loadedSources = await loadCorpusSources(temporaryRoot);
     assert.equal(loadedSources.size, 10);
 
-    // --mode retrieval with --suite works and sanitizes suiteFile to repo-relative path
-    const retrievalRun = await runBin("dinkus-guide-eval", [
-      "run", "--suite", customSuitePath, "--mode", "retrieval", "--json"
+    // --mode retrieval with --suite, --check-disjoint, and --summary-only omits per-case IDs/questions and redacts external path
+    const summaryRetrievalRun = await runBin("dinkus-guide-eval", [
+      "run", "--suite", externalSuitePath, "--check-disjoint", "eval/cases.json", "--summary-only", "--mode", "retrieval", "--json"
     ], {
       DINKUS_GUIDE_EMBED_BASE_URL: loopbackUrl,
       DINKUS_GUIDE_EMBED_MODEL: "qwen3-embedding"
     });
-    assert.equal(retrievalRun.code, 0);
-    assert.equal(retrievalRun.value.suiteFile, "eval/custom-holdout.json");
-    assert.equal(retrievalRun.value.mode, "retrieval");
-    assert.equal(retrievalRun.value.recall.hits, 2);
+    assert.equal(summaryRetrievalRun.code, 0);
+    assert.equal(summaryRetrievalRun.value.suiteFile, "<external-suite>");
+    assert.equal(summaryRetrievalRun.value.summaryOnly, true);
+    assert.equal(summaryRetrievalRun.value.suiteSha256, expectedExternalSha);
+    assert.equal(summaryRetrievalRun.value.disjointFrom.length, 1);
+    assert.equal(summaryRetrievalRun.value.disjointFrom[0].suiteFile, "eval/cases.json");
+    assert.equal(summaryRetrievalRun.value.recall.hits, 2);
+    assert.equal(summaryRetrievalRun.value.recall.cases, undefined);
+    assert.equal(summaryRetrievalRun.value.results, undefined);
+    assert.doesNotMatch(summaryRetrievalRun.stdout, /secret-pb-lookup-id/);
+    assert.doesNotMatch(summaryRetrievalRun.stdout, /secret-promotion-exam/);
+    assert.doesNotMatch(summaryRetrievalRun.stdout, /Pitney Bowes/);
+
+    // --check-disjoint fails closed with exit 2 whensuites overlap
+    const overlapRun = await runBin("dinkus-guide-eval", [
+      "run", "--suite", externalSuitePath, "--check-disjoint", externalSuitePath, "--summary-only", "--json"
+    ]);
+    assert.equal(overlapRun.code, 2);
+    assert.match(overlapRun.value.error, /disjointness check failed/);
 
     // --mode model records passed case + schema_error bucket when model emits malformed JSON
     const modelRun = await runBin("dinkus-guide-eval", [
-      "run", "--suite", "eval/custom-holdout.json", "--mode", "model", "--json"
+      "run", "--suite", externalSuitePath, "--check-disjoint", "eval/cases.json", "--summary-only", "--mode", "model", "--json"
     ], {
       DINKUS_GUIDE_EMBED_BASE_URL: loopbackUrl,
       DINKUS_GUIDE_EMBED_MODEL: "qwen3-embedding",
@@ -536,8 +634,11 @@ test("CLI supports corpus embed, --suite, --mode retrieval, sanitized suiteFile,
     assert.equal(modelRun.value.failed, 1);
     assert.equal(modelRun.value.failureBuckets.schema_error, 1);
     assert.deepEqual(modelRun.value.modelIdentity, ["nemotron-3.5-super-vl-mock"]);
+    assert.equal(modelRun.value.results, undefined);
+    assert.doesNotMatch(modelRun.stdout, /secret-malformed-model-case-id/);
   } finally {
     await new Promise((resolve) => server.close(resolve));
     await rm(temporaryRoot, { recursive: true, force: true });
+    await rm(externalHoldoutDir, { recursive: true, force: true });
   }
 });
