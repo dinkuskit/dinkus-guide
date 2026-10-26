@@ -100,7 +100,12 @@ provider transcripts are stored.
 
 ## Review state
 
-CI, comprehensive OpenClaw review (`P3`, exact tuple), native ClawSweeper
-evidence, and JevSweeper baseline disposition must be verified against the exact
-delivered PR head before human merge decision. No merge or deployment has
-occurred.
+- Epoch 1 (`0835ec55cfd474043cfbfd2cedafe13db4bcbb6a`): GitHub CI passed;
+  comprehensive `P3` OpenClaw review (`req-20261026T141702Z-202754229745`)
+  reported 1 `P2` finding (`OC-1`: offline `corpus sync` recovery when
+  `embeddings.json` is corrupt), repaired and regression-tested in Epoch 2
+  ([REVIEW_1.md](REVIEW_1.md)).
+- Exact-head CI and comprehensive `P3` OpenClaw review must verify the current
+  PR head before human merge decision; native ClawSweeper repository onboarding
+  is not yet configured on `dinkuskit/dinkus-guide`. No merge or deployment has
+  occurred.

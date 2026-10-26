@@ -16,8 +16,11 @@ sources. When `DINKUS_GUIDE_EMBED_BASE_URL` is set during `corpus sync`, it also
 computes chunk embeddings via `/v1/embeddings` (`DINKUS_GUIDE_EMBED_MODEL`,
 default `qwen3-embedding`; `DINKUS_GUIDE_EMBED_API_KEY` required on non-loopback
 HTTPS and optional on loopback HTTP) and writes `.cache/dinkus-guide/embeddings.json`
-bound to the exact `corpusHash` and returned `modelIdentity`. `verify` checks
-all source hashes and any cached embeddings. `ask` never writes to disk.
+bound to the exact `corpusHash` and returned `modelIdentity`. Running `corpus sync`
+without `DINKUS_GUIDE_EMBED_BASE_URL` discards any existing `embeddings.json` so
+an operator can always recover from a stale or corrupt embedding cache into
+offline `BM25` mode. `verify` checks all source hashes and any cached
+embeddings. `ask` never writes to disk.
 
 When `DINKUS_GUIDE_EMBED_BASE_URL` is unset, `ask` runs pure offline `FTS5`
 `BM25` retrieval with zero network requests in `extractive` mode. When

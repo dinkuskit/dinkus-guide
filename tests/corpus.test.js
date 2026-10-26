@@ -169,9 +169,19 @@ test("embeddings cache syncs in batches, verifies corpusHash/symlinks, and recov
     assert.equal(synced.embeddings.dimensions, 3);
     assert.equal(synced.embeddings.vectors.size, 10);
 
-    // Corrupt embeddings.json fails closed on verifyCorpus, and recovers cleanly on syncCorpus with embedTransport
+    // Corrupt embeddings.json fails closed on verifyCorpus, and recovers cleanly on normal syncCorpus without embedTransport
     await writeFile(isolated.embeddingsCachePath, "{corrupt-json", "utf8");
     await assert.rejects(isolated.verifyCorpus(), /embeddings cache is not valid JSON/);
+    const offlineRecovered = await isolated.syncCorpus({
+      fetchImpl: async (url) => new Response(bodies.get(url))
+    });
+    assert.equal(offlineRecovered.embeddings, null);
+    const verifiedAfterOfflineRecovery = await isolated.verifyCorpus();
+    assert.equal(verifiedAfterOfflineRecovery.embeddings, null);
+
+    // Corrupt embeddings.json also recovers cleanly on syncCorpus with embedTransport
+    await writeFile(isolated.embeddingsCachePath, JSON.stringify({ version: 99, broken: true }), "utf8");
+    await assert.rejects(isolated.verifyCorpus(), /embeddings cache has invalid schema/);
     const recovered = await isolated.syncCorpus({
       fetchImpl: async (url) => new Response(bodies.get(url)),
       chunkCorpusImpl: chunkCorpus,

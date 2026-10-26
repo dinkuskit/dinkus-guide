@@ -182,6 +182,14 @@ export async function syncCorpusEmbeddings(corpus, { embedTransport, chunkCorpus
   await rejectSymlinks(cacheRoot);
   await mkdir(cacheRoot, { recursive: true });
   await rejectSymlinks(embeddingsCachePath, true);
+  try {
+    const existing = await lstat(embeddingsCachePath);
+    if (!existing.isFile() || existing.isSymbolicLink()) {
+      throw new Error("embeddings cache path is not a regular file");
+    }
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+  }
   const chunks = chunkCorpusImpl(corpus);
   if (!chunks.length) throw new Error("cannot embed an empty corpus");
   const encoded = [];
@@ -264,12 +272,21 @@ export async function syncCorpus({ fetchImpl = fetch, timeoutMs = 15_000, concur
   await Promise.all(Array.from({ length: workerCount }, () => worker()));
   if (failure) throw failure;
 
-  const verified = await verifyCorpus({ includeEmbeddings: !embedTransport });
+  const verified = await verifyCorpus({ includeEmbeddings: false });
   if (embedTransport) {
     return syncCorpusEmbeddings(verified, { embedTransport, chunkCorpusImpl });
   }
-  if (!verified.embeddings) {
-    await rejectSymlinks(embeddingsCachePath, true);
+  await rejectSymlinks(embeddingsCachePath, true);
+  let existingEmbeddingsStat = null;
+  try {
+    existingEmbeddingsStat = await lstat(embeddingsCachePath);
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+  }
+  if (existingEmbeddingsStat) {
+    if (!existingEmbeddingsStat.isFile() || existingEmbeddingsStat.isSymbolicLink()) {
+      throw new Error("embeddings cache path is not a regular file");
+    }
     await rm(embeddingsCachePath, { force: true });
   }
   return verified;
