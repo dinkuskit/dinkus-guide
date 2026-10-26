@@ -1,0 +1,140 @@
+# DinkusGuide Rung 1 proof (`#2`)
+
+Base: `a234f84f285bd5f93194c43e1c4469e8253944eb` (initial base `11babd627bb5a6562a537bd16a2a39f8e126c5a7`, synced after `PR #7` ClawSweeper sender install)
+Evaluated source (retrieval/ranking in `src/guide.js` unchanged since `6ec7f6c`): `25c3738b68fc87c36f5f67d31039c5f539ae1bc7` -> `6ec7f6c4472d4207b4f5dbdec1862f532449afe8`
+Issue: https://github.com/dinkuskit/dinkus-guide/issues/2
+
+## What exists
+
+Rung 1 expands `corpus/manifest.json` from 15 to 162 immutable public MIT
+documentation pins (`2,138` structural chunks) across all seven approved public
+repositories (`dinkuskit/dinkuskit`, `dinkuskit/commerce`,
+`dinkuskit/payments`, `dinkuskit/inventory`, `dinkuskit/ship`,
+`dinkuskit/template-store`, and `emdash-cms/emdash`), replaces the v1 per-topic
+regex score boosts with `node:sqlite` `FTS5` (`BM25`) + optional dense vector
+(`qwen3-embedding`) Reciprocal Rank Fusion (`RRF`, $k = 60$) hybrid search and
+two-pass layer diversity balancing, preserves `[STATUS: RETIRED]` chunk/prompt
+provenance and Worker B `E1..En` isolation, and reports standalone `recall@k`
+before model synthesis runs.
+
+## Corpus coverage and hygiene
+
+- **162 pinned public MIT files** (`corpusHash`:
+  `dc80b5fa494a7d7d2e90c2ae4e80cc512e217b837100e2101941e51d0ac5a501`):
+  - `dinkuskit` layer: `56` active sources (`dinkuskit/dinkuskit`: `14`,
+    `dinkuskit/commerce`: `9`, `dinkuskit/payments`: `19`,
+    `dinkuskit/inventory`: `4`, `dinkuskit/ship`: `6`, and
+    `dinkuskit/template-store`: `4` active in `dinkuskit` + `1` in `transition` =
+    `5` total in `dinkuskit/template-store`, `57` total across DinkusKit repos).
+  - `transition` layer: `1` active source
+    (`dinkuskit/template-store:docs/implementation/upstream-blocks-transition.md`).
+  - `emdash` layer: `105` active sources (`README.md`, `94`
+    `docs/src/content/docs/**/*.{md,mdx}` pages, and `10` non-empty
+    `packages/*/README.md` files).
+- **Excluded retired/internal surfaces**:
+  - Retired `dinkuskit/blocks` historical API/usage docs (`APPROVED_REPOSITORIES`
+    rejects `dinkuskit/blocks`).
+  - Sibling repositories deferred for Rung 1: `dinkuskit/coupons`,
+    `dinkuskit/bundles`, `dinkuskit/template-services`, and
+    `dinkuskit/template-marketing`.
+  - Release website templates (`<plugin>/docs/website/**`) containing literal
+    `{{version}}` / `{{release_date}}` placeholders, meta-authoring guides
+    (`docs/documentation-authoring.md`, `docs/updates/README.md`),
+    `docs/implementation/*` slice notes (except `upstream-blocks-transition.md`),
+    retired `isolated-ship*` and v1 `merchant-inventory-connect.md`,
+    `WAITING_FOR_HUMAN` drafts (`checkout-timing-decision.md`, `v1-demo-plan.md`),
+    and duplicate `emdash/skills/**` mirrors.
+- **Upstream documentation notes**:
+  - `dinkuskit/ship` currently exposes six canonical public Markdown documents;
+    broader merchant shipping guides remain upstream work rather than invented
+    here.
+  - `dinkuskit/dinkuskit#90` (`docs/updates/**` expansion) was still open on
+    upstream `main` when this manifest was pinned (`commerce#186`,
+    `payments#92`, and `ship#72` were already merged on `main`).
+
+## Reproducible checks
+
+- `npm test`: `47/47` pass.
+- `npm run verify`: pass (`162` pinned public sources: `dinkuskit=56`,
+  `transition=1`, `emdash=105`).
+- `node bin/dinkus-guide corpus verify --json`: pass.
+- Offline `FTS5` `BM25` standalone retrieval recall (`node bin/dinkus-guide-eval run --json --mode recall`):
+  `18/19` (`94.7%`, [RECALL_BM25.json](RECALL_BM25.json)).
+- Offline `FTS5` `BM25` extractive mode (`node bin/dinkus-guide-eval run --json --mode extractive`):
+  `23/24` (`95.8%`, [EXTRACTIVE_BM25.json](EXTRACTIVE_BM25.json)).
+- Hybrid `FTS5` `BM25` + `qwen3-embedding:latest` (`4,096` dims across `2,138`
+  chunks) standalone retrieval recall: `19/19` (`100.0%`,
+  [RECALL_HYBRID.json](RECALL_HYBRID.json)).
+- Hybrid `FTS5` `BM25` + `qwen3-embedding:latest` extractive mode: `24/24`
+  (`100.0%`, [EXTRACTIVE_HYBRID.json](EXTRACTIVE_HYBRID.json)).
+- Hybrid Worker B synthesis (`nemotron-3.5-super-vl`, `max_tokens: 1024`,
+  thinking disabled): `19/24` (`79.2%`, [MODEL_HYBRID.json](MODEL_HYBRID.json);
+  run metadata in [HYBRID_RUN.json](HYBRID_RUN.json)).
+- Source-blind CLI behavior retest: PASS across all contracted clauses with
+  byte-identical cache fingerprint before and after
+  ([INDEPENDENT_PROOF.md](INDEPENDENT_PROOF.md)).
+
+All evaluations use the frozen `corrected-public-development-v3` suite (version
+3, 24 cases; `eval/cases.json` unmodified). Live embedding and model runs used
+temporary local OpenAI-compatible loopback forwards to the existing test
+runtimes (`213,125` ms corpus embedding sync across `2,138` chunks; `109,705` ms
+across the 24-case model evaluation). No credentials, internal hostnames, or raw
+provider transcripts are stored.
+
+## Known misses and next bounded work
+
+- **Offline `FTS5` `BM25` (`23/24` extractive, `18/19` `recall@12`)**:
+  `ownership` misses `kit-readme` in pure lexical mode because `kit-readme` does
+  not mention `"MIT"` or ownership directly (`payments-readme`,
+  `commerce-readme`, and `kit-provenance` match `"license"`/`"MIT"` instead).
+  Dense `qwen3-embedding:latest` RRF pulls `kit-readme` into `E1..E12` alongside
+  the license-bearing sources (`19/19` `recall@12`, `24/24` hybrid extractive).
+- **Worker B synthesis (`19/24` hybrid model mode)**: with `19/19` retrieval
+  recall established before synthesis, all five remaining model misses are
+  Worker B synthesis/schema failures (`ownership` and `emdash-start` exited with
+  code 4 on strict JSON output validation; `template`, `kit-start`, and
+  `cross-payments` matched required facts but cited sibling documents rather
+  than every benchmark source ID). Those belong to Rung 2 (`#3` evaluation
+  expansion) and Rung 3 (`#4` `response_format: json_schema` + prompt synthesis
+  refinement).
+
+## Review state
+
+- Epoch 1 (`0835ec55cfd474043cfbfd2cedafe13db4bcbb6a`): GitHub CI passed;
+  comprehensive `P3` OpenClaw review (`req-20261026T141702Z-202754229745`)
+  reported 1 `P2` finding (`OC-1`: offline `corpus sync` recovery when
+  `embeddings.json` is corrupt), repaired and regression-tested in `eb40f11`
+  ([REVIEW_1.md](REVIEW_1.md)).
+- Epoch 2 (`eb40f112c6e7b447ae30838ab64d9cd1be15d3da`): GitHub CI passed;
+  comprehensive `P3` OpenClaw review (`req-20261026T142521Z-203572822875`)
+  reported 1 `P2` finding (`OC-2`: `dinkus-guide-eval --k 13..50` truncated to
+  12 without `--limit` pass-through), repaired and regression-tested in
+  `6ec7f6c` ([REVIEW_2.md](REVIEW_2.md)).
+- Epoch 3 (`6ec7f6c4472d4207b4f5dbdec1862f532449afe8`): GitHub CI passed;
+  comprehensive `P3` OpenClaw review (`req-20261026T143432Z-204686113358`)
+  finished **`clean; 0 findings`** ([REVIEW_3.md](REVIEW_3.md)).
+- Epoch 4 (`21bc2c44c5dabdbe1c807288a7398aecc0651578`, synced with `main`
+  `a234f84f285bd5f93194c43e1c4469e8253944eb` after `PR #7` ClawSweeper sender
+  install): GitHub CI passed; comprehensive `P3` OpenClaw review
+  (`req-20261026T162608Z-222489725135`) reported 1 `P2` finding (`OC-3`:
+  validate `embeddings.json` chunk keys/count against `chunkCorpus(corpus)`
+  during `verifyCorpus()`); native ClawSweeper review
+  (`#issuecomment-6421682671`) scored proof `5/6` (`proof: sufficient`) and
+  reported 1 `P3` finding (`CS-1`: per-repository manifest counts in `PROOF.md`),
+  classified by JevSweeper (`jev-1.13.0`) as `repair` (`2/2` boxes) and repaired
+  together in Epoch 5 ([REVIEW_4.md](REVIEW_4.md)).
+- Epoch 5 (`e4b690c89400252e16545b2825c7160b39221691`): GitHub CI passed; native
+  ClawSweeper (`#issuecomment-6421682671` Revision 2) reached `Ready for
+  maintainer review` (`0` findings, JevSweeper `no-leftovers`); comprehensive
+  `P3` OpenClaw review (`req-20261026T165422Z-22770784078`) reported 1 `P3`
+  finding (`OC-4`: classify `syncCorpusEmbeddings` provider/output failures as
+  exit code `4`), repaired and regression-tested in Epoch 6 ([REVIEW_5.md](REVIEW_5.md)).
+- Epoch 6 (`f642ccadaaab8c4f8e6dd185d2e2cf1140fe1b8b`): GitHub CI passed; native
+  ClawSweeper (`#issuecomment-6421682671` Revision 3) remained `Ready for
+  maintainer review` (`0` findings, JevSweeper `no-leftovers`); comprehensive
+  `P3` OpenClaw review (`req-20261026T170859Z-229803214798`) reported 1 `P3`
+  finding (`OC-5`: classify `syncCorpusEmbeddings` size-limit overflow as exit
+  code `4`), repaired and regression-tested in Epoch 7 ([REVIEW_6.md](REVIEW_6.md)).
+- Epoch 7 verifies the `OC-5` exit-code alignment across exact-head CI,
+  comprehensive `P3` OpenClaw review, native ClawSweeper review, and JevSweeper
+  disposition before human merge decision. No merge or deployment has occurred.

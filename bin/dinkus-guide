@@ -1,13 +1,13 @@
 #!/usr/bin/env node
-import { answerQuestion, createOpenAICompatibleTransport } from "../src/guide.js";
+import { answerQuestion, chunkCorpus, createOpenAICompatibleEmbedTransport, createOpenAICompatibleTransport } from "../src/guide.js";
 import { syncCorpus, verifyCorpus } from "../src/corpus.js";
 
 const VERSION = "1.0.1";
 const args = process.argv.slice(2);
 
 function parseArgs() {
-  const allowed = new Set(["--json", "--help", "--version", "--mode"]);
-  const values = { json: false, mode: "extractive", modeSet: false, positional: [] };
+  const allowed = new Set(["--json", "--help", "--version", "--mode", "--limit"]);
+  const values = { json: false, mode: "extractive", modeSet: false, limit: 12, limitSet: false, positional: [] };
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
     if (arg.startsWith("-") && !allowed.has(arg)) throw Object.assign(new Error(`unknown option: ${arg}`), { code: 2 });
@@ -18,6 +18,15 @@ function parseArgs() {
       values.modeSet = true;
       values.mode = args[++index]; continue;
     }
+    if (arg === "--limit") {
+      if (values.limitSet || index + 1 >= args.length || args[index + 1].startsWith("-")) throw Object.assign(new Error("missing or duplicate --limit"), { code: 2 });
+      values.limitSet = true;
+      const parsedLimit = Number(args[++index]);
+      if (!Number.isInteger(parsedLimit) || parsedLimit < 1 || parsedLimit > 50) {
+        throw Object.assign(new Error("limit must be an integer between 1 and 50"), { code: 2 });
+      }
+      values.limit = parsedLimit; continue;
+    }
     values.positional.push(arg);
   }
   return values;
@@ -27,7 +36,42 @@ function help() {
   console.log(`DinkusGuide ${VERSION}
 Usage:
   dinkus-guide corpus sync|verify [--json]
-  dinkus-guide ask QUESTION [--json] [--mode extractive|model]`);
+  dinkus-guide ask QUESTION [--json] [--mode extractive|model] [--limit 12]`);
+}
+
+function buildEmbedTransportFromEnv() {
+  if (!process.env.DINKUS_GUIDE_EMBED_BASE_URL) return undefined;
+  try {
+    const raw = createOpenAICompatibleEmbedTransport({
+      baseUrl: process.env.DINKUS_GUIDE_EMBED_BASE_URL,
+      model: process.env.DINKUS_GUIDE_EMBED_MODEL || "qwen3-embedding",
+      apiKey: process.env.DINKUS_GUIDE_EMBED_API_KEY || ""
+    });
+    return async (request) => {
+      try {
+        return await raw(request);
+      } catch (error) {
+        throw Object.assign(new Error(error?.message ?? String(error)), { code: 4 });
+      }
+    };
+  } catch (error) {
+    throw Object.assign(new Error(error?.message ?? String(error)), { code: 4 });
+  }
+}
+
+function formatCorpusSummary(result) {
+  return {
+    status: "verified",
+    corpusHash: result.corpusHash,
+    sources: result.manifest.sources.length,
+    ...(result.embeddings ? {
+      embeddings: {
+        modelIdentity: result.embeddings.modelIdentity,
+        dimensions: result.embeddings.dimensions,
+        chunks: result.embeddings.vectors.size
+      }
+    } : {})
+  };
 }
 
 function output(value, json) {
@@ -46,30 +90,44 @@ try {
   if (!["extractive", "model"].includes(parsed.mode)) throw Object.assign(new Error("mode must be extractive or model"), { code: 2 });
   const positional = parsed.positional;
   if (positional[0] === "corpus" && ["sync", "verify"].includes(positional[1])) {
-    if (positional.length !== 2) throw Object.assign(new Error("unexpected corpus arguments"), { code: 2 });
+    if (positional.length !== 2 || parsed.limitSet) {
+      throw Object.assign(new Error("unexpected corpus arguments"), { code: 2 });
+    }
     let result;
     try {
-      result = positional[1] === "sync" ? await syncCorpus() : await verifyCorpus();
+      if (positional[1] === "sync") {
+        const embedTransport = buildEmbedTransportFromEnv();
+        result = await syncCorpus({ embedTransport, chunkCorpusImpl: chunkCorpus });
+      } else {
+        result = await verifyCorpus({ chunkCorpusImpl: chunkCorpus });
+        const embedTransport = buildEmbedTransportFromEnv();
+        if (embedTransport && !result.embeddings) {
+          throw Object.assign(new Error("corpus embeddings cache is missing; run corpus sync with embedding configuration"), { code: 3 });
+        }
+      }
     } catch (error) {
-      throw Object.assign(new Error(error?.message ?? String(error)), { code: 3 });
+      throw Object.assign(new Error(error?.message ?? String(error)), { code: Number.isInteger(error?.code) ? error.code : 3 });
     }
-    output({ status: "verified", corpusHash: result.corpusHash, sources: result.manifest.sources.length }, parsed.json);
+    output(formatCorpusSummary(result), parsed.json);
     process.exit(0);
   }
-  if (positional[0] !== "ask" || positional.length < 2) throw Object.assign(new Error("expected ask QUESTION or corpus sync|verify"), { code: 2 });
+  if (positional[0] !== "ask" || positional.length < 2 || !positional.slice(1).join(" ").trim()) {
+    throw Object.assign(new Error("expected ask QUESTION or corpus sync|verify"), { code: 2 });
+  }
   let corpus;
   try {
-    corpus = await verifyCorpus();
+    corpus = await verifyCorpus({ chunkCorpusImpl: chunkCorpus });
   } catch (error) {
     throw Object.assign(new Error(error?.message ?? String(error)), { code: 3 });
   }
+  const embedTransport = buildEmbedTransportFromEnv();
   const transport = parsed.mode === "model" ? createOpenAICompatibleTransport({
     baseUrl: process.env.DINKUS_GUIDE_BASE_URL,
     model: process.env.DINKUS_GUIDE_MODEL || "nemotron-3.5-super-vl",
     apiKey: process.env.DINKUS_GUIDE_API_KEY,
     noThink: process.env.DINKUS_GUIDE_NO_THINK === "1"
   }) : undefined;
-  output(await answerQuestion(positional.slice(1).join(" "), corpus, { mode: parsed.mode, transport }), parsed.json);
+  output(await answerQuestion(positional.slice(1).join(" "), corpus, { mode: parsed.mode, limit: parsed.limit, transport, embedTransport }), parsed.json);
 } catch (error) {
   const code = Number.isInteger(error?.code) ? error.code : (parsed?.mode === "model" ? 4 : 3);
   const jsonOutput = Boolean(parsed?.json || args.includes("--json"));

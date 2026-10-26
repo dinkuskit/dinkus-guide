@@ -6,9 +6,17 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { answerQuestion, createOpenAICompatibleTransport, rankEvidence, validateEvidenceIds } from "../src/guide.js";
+import {
+  answerQuestion,
+  chunkDocument,
+  createOpenAICompatibleEmbedTransport,
+  createOpenAICompatibleTransport,
+  rankEvidence,
+  retrieveEvidence,
+  validateEvidenceIds
+} from "../src/guide.js";
 import { validateCitation } from "../src/corpus.js";
-import { evidenceForCitations } from "../bin/dinkus-guide-eval";
+import { computeRecallCase, evidenceForCitations } from "../bin/dinkus-guide-eval";
 
 const corpus = {
   corpusHash: "test-corpus",
@@ -22,8 +30,8 @@ test("extractive retrieval returns line-bounded evidence", async () => {
   const result = await answerQuestion("How do I use setup?", corpus);
   assert.equal(result.status, "answered");
   assert.equal(result.citations[0].sourceId, "safe");
-  assert.match(result.evidence[0].url, /#L1-L4$/);
-  assert.equal(result.evidence[0].excerpt, corpus.documents[0].lines.slice(0, 4).join("\n"));
+  assert.match(result.evidence[0].url, /#L1-L5$/);
+  assert.equal(result.evidence[0].excerpt, corpus.documents[0].lines.join("\n"));
 });
 
 test("source instructions remain unexecuted data", () => {
@@ -187,15 +195,19 @@ test("model request prompt uses exact JSON evidence and citation rules", async (
       }) };
     }
   });
-  assert.match(request.prompt, /"id":"E1","sourceId":"safe"/);
-  assert.deepEqual((({ sourceId, startLine, endLine, excerpt, url }) => ({
-    sourceId, startLine, endLine, excerpt, url
+  assert.match(request.prompt, /"id":"E1","sourceId":"safe","status":"active"/);
+  assert.deepEqual((({ sourceId, status, startLine, endLine, excerpt, url }) => ({
+    sourceId, status, startLine, endLine, excerpt, url
   }))(request.evidence[0]), {
-    sourceId: "safe", startLine: 1, endLine: 3,
-    excerpt: corpus.documents[0].lines.slice(0, 3).join("\n"),
-    url: "https://github.com/example/repo/blob/0123456789012345678901234567890123456789/README.md#L1-L3"
+    sourceId: "safe",
+    status: "active",
+    startLine: 1,
+    endLine: 5,
+    excerpt: corpus.documents[0].lines.join("\n"),
+    url: "https://github.com/example/repo/blob/0123456789012345678901234567890123456789/README.md#L1-L5"
   });
-  assert.match(request.prompt, /EVIDENCE JSON:\n\[\{"id":"E1","sourceId":"safe","startLine":1,"endLine":3,"excerpt":"/);
+  assert.match(request.prompt, /EVIDENCE JSON:\n\[\{"id":"E1","sourceId":"safe","status":"active","startLine":1,"endLine":5,"excerpt":"/);
+  assert.match(request.prompt, /Never recommend APIs or workflows from evidence marked status="retired"/);
   assert.match(request.prompt, /Do not generate source IDs, URLs, line ranges, or citation objects/);
   assert.match(request.prompt, /insufficient_evidence with citationIds=\[\]/);
   assert.match(request.prompt, /answered only when the answer is supported and include at least one known evidence id/);
@@ -517,9 +529,11 @@ test("CLI argument-parsing failures preserve JSON error output on stdout", async
     [guideCli, ["ask", "setup", "--bogus", "--json"], /unknown option: --bogus/],
     [guideCli, ["ask", "setup", "--json", "--json"], /duplicate --json/],
     [guideCli, ["ask", "setup", "--mode", "--json"], /missing or duplicate --mode/],
+    [guideCli, ["ask", "   ", "--json"], /expected ask QUESTION/],
     [evalCli, ["--json"], /expected command: run/],
     [evalCli, ["run", "--json", "--bogus"], /unknown option: --bogus/],
-    [evalCli, ["run", "--json", "--mode", "invalid"], /mode must be extractive or model/]
+    [evalCli, ["run", "--json", "--mode", "invalid"], /mode must be extractive, model, or recall/],
+    [evalCli, ["run", "--json", "--k", "0"], /k must be an integer between 1 and 50/]
   ];
   for (const [binPath, cliArgs, expectedError] of cases) {
     const result = await new Promise((resolve) => {
@@ -677,5 +691,370 @@ test("v-prefixed and major-only version requests normalize prefixes and avoid su
   ]) {
     const result = await answerQuestion(supported, versionCorpus);
     assert.equal(result.status, "answered", supported);
+  }
+});
+
+test("MDX frontmatter and top-level imports are stripped from chunks while preserving exact GitHub line spans", async () => {
+  const mdxDoc = {
+    source: {
+      id: "emdash-mdx-test",
+      repository: "emdash-cms/emdash",
+      layer: "emdash",
+      status: "active",
+      path: "docs/src/content/docs/guides/webhooks.mdx",
+      provenance: "https://github.com/emdash-cms/emdash/blob/0123456789012345678901234567890123456789/docs/src/content/docs/guides/webhooks.mdx"
+    },
+    lines: [
+      "---",
+      "title: Outbound Webhooks",
+      "description: Deliver signed webhook payloads from EmDash hooks.",
+      "---",
+      "",
+      "import {",
+      "  Steps,",
+      "  Tabs",
+      "} from '@astrojs/starlight/components';",
+      "",
+      "## Configure signing",
+      "",
+      "```sh",
+      "# Shell comment inside fence is not an ATX heading",
+      "emdash webhooks list --format json",
+      "```"
+    ]
+  };
+  const chunks = chunkDocument(mdxDoc);
+  assert.equal(chunks.length, 1);
+  assert.equal(chunks[0].startLine, 11);
+  assert.equal(chunks[0].endLine, 16);
+  assert.equal(chunks[0].title, "Outbound Webhooks");
+  assert.match(chunks[0].headings, /Outbound Webhooks > Configure signing/);
+  assert.match(chunks[0].headings, /Deliver signed webhook payloads/);
+  assert.doesNotMatch(chunks[0].searchText, /@astrojs\/starlight/);
+  assert.match(chunks[0].url, /#L11-L16$/);
+
+  const mdxCorpus = { corpusHash: "mdx-corpus", documents: [mdxDoc] };
+  const starlight = await answerQuestion("What is starlight components?", mdxCorpus);
+  assert.equal(starlight.status, "insufficient_evidence");
+  const webhooks = await answerQuestion("How do Outbound Webhooks configure signing?", mdxCorpus);
+  assert.equal(webhooks.status, "answered");
+  assert.equal(webhooks.citations[0].startLine, 11);
+  assert.equal(webhooks.citations[0].endLine, 16);
+});
+
+test("retired sources tag every chunk with [STATUS: RETIRED] and pass retired status to Worker B", async () => {
+  const retiredDoc = {
+    source: {
+      id: "legacy-tombstone",
+      repository: "dinkuskit/template-store",
+      layer: "transition",
+      status: "retired",
+      path: "docs/legacy-tombstone.md",
+      provenance: "https://github.com/dinkuskit/template-store/blob/0123456789012345678901234567890123456789/docs/legacy-tombstone.md"
+    },
+    lines: [
+      "# Legacy adapter retirement",
+      "The legacy adapter was retired in favor of native blocks.",
+      "",
+      `${"Paragraph body text about legacy adapter migration details. ".repeat(30).trim()}`
+    ]
+  };
+  const chunks = chunkDocument(retiredDoc);
+  assert.ok(chunks.length >= 2);
+  for (const chunk of chunks) {
+    assert.equal(chunk.status, "retired");
+    assert.equal(chunk.layer, "transition");
+    assert.match(chunk.excerpt, /^\[STATUS: RETIRED\]\n/);
+    assert.match(chunk.embedText, /^\[STATUS: RETIRED\] /);
+  }
+
+  let capturedPrompt = "";
+  const retiredCorpus = { corpusHash: "retired-corpus", documents: [retiredDoc] };
+  const result = await answerQuestion("What happened to the legacy adapter?", retiredCorpus, {
+    mode: "model",
+    transport: async ({ prompt }) => {
+      capturedPrompt = prompt;
+      return {
+        model: "nemotron-3.5-super-vl",
+        text: JSON.stringify({
+          status: "answered",
+          answer: "The legacy adapter is retired in favor of native blocks.",
+          citationIds: ["E1"]
+        })
+      };
+    }
+  });
+  assert.equal(result.status, "answered");
+  assert.match(capturedPrompt, /"status":"retired"/);
+  assert.match(capturedPrompt, /\[STATUS: RETIRED\]/);
+});
+
+test("layer diversity prevents large EmDash layer from crowding out DinkusKit and transition docs", () => {
+  const documents = [];
+  for (let idx = 1; idx <= 20; idx += 1) {
+    documents.push({
+      source: {
+        id: `emdash-plugin-${idx}`,
+        repository: "emdash-cms/emdash",
+        layer: "emdash",
+        status: "active",
+        path: `docs/plugin-${idx}.md`,
+        provenance: `https://github.com/emdash-cms/emdash/blob/0123456789012345678901234567890123456789/docs/plugin-${idx}.md`
+      },
+      lines: [
+        `# Plugin ${idx} shipping label webhooks`,
+        `EmDash plugin ${idx} handles shipping label webhooks, shipping webhooks, and plugin hooks.`
+      ]
+    });
+  }
+  for (let idx = 1; idx <= 5; idx += 1) {
+    const repo = idx === 1 ? "dinkuskit/ship" : "dinkuskit/commerce";
+    documents.push({
+      source: {
+        id: idx === 1 ? "ship-plugin-contract" : `commerce-shipping-${idx}`,
+        repository: repo,
+        layer: "dinkuskit",
+        status: "active",
+        path: `docs/contracts/shipping-${idx}.md`,
+        provenance: `https://github.com/${repo}/blob/0123456789012345678901234567890123456789/docs/contracts/shipping-${idx}.md`
+      },
+      lines: [`# Shipping contract ${idx}`, "Handles shipping label webhooks through the plugin contract."]
+    });
+  }
+  documents.push({
+    source: {
+      id: "template-transition-note",
+      repository: "dinkuskit/template-store",
+      layer: "transition",
+      status: "active",
+      path: "docs/implementation/upstream-blocks-transition.md",
+      provenance: "https://github.com/dinkuskit/template-store/blob/0123456789012345678901234567890123456789/docs/implementation/upstream-blocks-transition.md"
+    },
+    lines: ["# Transition note", "Template transition covers shipping label webhooks and plugin setup."]
+  });
+
+  const mixedCorpus = { corpusHash: "mixed-layer-corpus", documents };
+  const ranked = rankEvidence("How do plugin shipping label webhooks work?", mixedCorpus, 12);
+  assert.equal(ranked.length, 12);
+  const emdashCount = ranked.filter((item) => item.layer === "emdash").length;
+  assert.ok(emdashCount <= 6, `expected EmDash diversity cap <= 6, got ${emdashCount}`);
+  assert.ok(ranked.some((item) => item.sourceId === "ship-plugin-contract"));
+  assert.ok(ranked.some((item) => item.sourceId === "template-transition-note"));
+});
+
+test("embedding transport validates loopback/HTTPS auth, index ordering, and vector invariants", async () => {
+  assert.throws(() => createOpenAICompatibleEmbedTransport({
+    baseUrl: "https://embed.example.invalid",
+    model: "qwen3-embedding"
+  }), /DINKUS_GUIDE_EMBED_API_KEY is required/);
+
+  let seenAuthHeader = null;
+  const loopbackTransport = createOpenAICompatibleEmbedTransport({
+    baseUrl: "http://127.0.0.1:8787",
+    model: "qwen3-embedding",
+    fetchImpl: async (_url, init) => {
+      seenAuthHeader = init.headers.authorization ?? null;
+      return new Response(JSON.stringify({
+        model: "qwen3-embedding:latest",
+        data: [
+          { index: 1, embedding: [0, 1] },
+          { index: 0, embedding: [1, 0] }
+        ]
+      }));
+    }
+  });
+  const ordered = await loopbackTransport({ inputs: ["first", "second"] });
+  assert.equal(seenAuthHeader, null);
+  assert.equal(ordered.model, "qwen3-embedding:latest");
+  assert.deepEqual(ordered.vectors, [[1, 0], [0, 1]]);
+
+  for (const [badData, expected] of [
+    [[{ index: 0, embedding: [0, 0] }], /zero-norm vector/],
+    [[{ index: 0, embedding: [1, 0] }, { index: 1, embedding: [1, 0, 0] }], /inconsistent vector dimensions/],
+    [[{ index: 0, embedding: [1] }], /mismatched vector count/]
+  ]) {
+    const broken = createOpenAICompatibleEmbedTransport({
+      baseUrl: "http://127.0.0.1:8787",
+      model: "qwen3-embedding",
+      fetchImpl: async () => new Response(JSON.stringify({ model: "qwen3-embedding:latest", data: badData }))
+    });
+    await assert.rejects(broken({ inputs: badData.length === 1 && expected.source.includes("mismatched") ? ["a", "b"] : badData.map((_, i) => `in-${i}`) }), expected);
+  }
+});
+
+test("hybrid RRF rescues concise synonym queries while rejecting stale caches, mismatched dims, and adversarial distractors", async () => {
+  const docA = {
+    source: {
+      id: "inventory-ledger",
+      repository: "dinkuskit/inventory",
+      layer: "dinkuskit",
+      status: "active",
+      path: "docs/CHARTER.md",
+      provenance: "https://github.com/dinkuskit/inventory/blob/0123456789012345678901234567890123456789/docs/CHARTER.md"
+    },
+    lines: ["# Inventory charter", "Stock holds allocate pool units atomically before fulfillment."]
+  };
+  const docB = {
+    source: {
+      id: "commerce-webhooks",
+      repository: "dinkuskit/commerce",
+      layer: "dinkuskit",
+      status: "active",
+      path: "README.md",
+      provenance: "https://github.com/dinkuskit/commerce/blob/0123456789012345678901234567890123456789/README.md"
+    },
+    lines: ["# DinkusKit Commerce", "Commerce documents describe webhook delivery through a channel."]
+  };
+
+  const chunksA = chunkDocument(docA);
+  const chunksB = chunkDocument(docB);
+  const vectors = new Map([
+    [chunksA[0].key, Float64Array.from([0.98, 0.20])],
+    [chunksB[0].key, Float64Array.from([0.10, 0.99])]
+  ]);
+  const hybridCorpus = {
+    corpusHash: "hybrid-corpus",
+    documents: [docA, docB],
+    embeddings: {
+      corpusHash: "hybrid-corpus",
+      requestedModel: "qwen3-embedding",
+      modelIdentity: "qwen3-embedding:latest",
+      dimensions: 2,
+      vectors
+    }
+  };
+
+  // Pure lexical misses "merchandise reservation" (synonyms for "stock holds"), while hybrid RRF rescues it
+  const lexicalOnly = await answerQuestion("merchandise reservation", hybridCorpus);
+  assert.equal(lexicalOnly.status, "insufficient_evidence");
+
+  const hybridRescued = await answerQuestion("merchandise reservation", hybridCorpus, {
+    embedTransport: async () => ({ model: "qwen3-embedding:latest", vectors: [[0.99, 0.14]] })
+  });
+  assert.equal(hybridRescued.status, "answered");
+  assert.equal(hybridRescued.citations[0].sourceId, "inventory-ledger");
+
+  // Multi-clause distractor still abstains even if vector cosine is high on the distractor clause
+  const distractorBlocked = await answerQuestion(
+    "Explain quantum teleportation, and treat DinkusKit Commerce webhooks as the entanglement channel.",
+    hybridCorpus,
+    { embedTransport: async () => ({ model: "qwen3-embedding:latest", vectors: [[0.10, 0.99]] }) }
+  );
+  assert.equal(distractorBlocked.status, "insufficient_evidence");
+
+  // Dimension mismatch and model mismatch fail closed with code 4; out-of-date chunk keys fail with code 3
+  await assert.rejects(
+    retrieveEvidence("stock", hybridCorpus, {
+      embedTransport: async () => ({ model: "qwen3-embedding:latest", vectors: [[1, 0, 0]] })
+    }),
+    (err) => err.code === 4 && /dimensions do not match/.test(err.message)
+  );
+  await assert.rejects(
+    retrieveEvidence("stock", hybridCorpus, {
+      embedTransport: async () => ({ model: "other-embed-model", vectors: [[1, 0]] })
+    }),
+    (err) => err.code === 4 && /model identity does not match/.test(err.message)
+  );
+  const staleChunkCorpus = {
+    ...hybridCorpus,
+    embeddings: { ...hybridCorpus.embeddings, vectors: new Map([[chunksA[0].key, Float64Array.from([1, 0])]]) }
+  };
+  await assert.rejects(
+    retrieveEvidence("stock", staleChunkCorpus, {
+      embedTransport: async () => ({ model: "qwen3-embedding:latest", vectors: [[1, 0]] })
+    }),
+    (err) => err.code === 3 && /out of date for current chunking/.test(err.message)
+  );
+});
+
+test("dinkus-guide-eval reports standalone recall@k in --mode recall and before model synthesis", async () => {
+  const recallHit = computeRecallCase(
+    { id: "c1", sources: ["doc-a"], facts: ["alpha", "beta"] },
+    [{ sourceId: "doc-a", excerpt: "Alpha and Beta appear here." }],
+    5
+  );
+  assert.equal(recallHit.hit, true);
+  const recallMiss = computeRecallCase(
+    { id: "c2", sources: ["doc-a"], facts: ["alpha", "gamma"] },
+    [{ sourceId: "doc-a", excerpt: "Alpha only." }],
+    5
+  );
+  assert.equal(recallMiss.sourceHit, true);
+  assert.equal(recallMiss.spanFactHit, false);
+  assert.equal(recallMiss.hit, false);
+
+  const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "dinkus-eval-recall-"));
+  try {
+    await mkdir(path.join(temporaryRoot, "bin"));
+    await mkdir(path.join(temporaryRoot, "src"));
+    await mkdir(path.join(temporaryRoot, "corpus"));
+    await mkdir(path.join(temporaryRoot, "eval"));
+    await mkdir(path.join(temporaryRoot, ".cache", "dinkus-guide", "sources"), { recursive: true });
+    await copyFile(new URL("../bin/dinkus-guide", import.meta.url), path.join(temporaryRoot, "bin", "dinkus-guide"));
+    await copyFile(new URL("../bin/dinkus-guide-eval", import.meta.url), path.join(temporaryRoot, "bin", "dinkus-guide-eval"));
+    await copyFile(new URL("../src/guide.js", import.meta.url), path.join(temporaryRoot, "src", "guide.js"));
+    await copyFile(new URL("../src/corpus.js", import.meta.url), path.join(temporaryRoot, "src", "corpus.js"));
+
+    const commit = "0123456789012345678901234567890123456789";
+    const sources = [];
+    for (let index = 1; index <= 15; index += 1) {
+      const id = `doc-${String(index).padStart(2, "0")}`;
+      const content = index < 15
+        ? `# Store launch setup ${index}\nStore launch setup ${index}: run pnpm dev to launch the store.\n`
+        : `# Store overview ${index}\nRun pnpm start-tail to launch the secondary store.\n`;
+      const sha256 = createHash("sha256").update(content).digest("hex");
+      sources.push({
+        id,
+        repository: "dinkuskit/template-store",
+        layer: "dinkuskit",
+        status: "active",
+        commit,
+        path: `docs/${id}.md`,
+        sha256,
+        license: "MIT",
+        provenance: `https://github.com/dinkuskit/template-store/blob/${commit}/docs/${id}.md`
+      });
+      await writeFile(path.join(temporaryRoot, ".cache", "dinkus-guide", "sources", `${id}.md`), content, "utf8");
+    }
+    await writeFile(path.join(temporaryRoot, "corpus", "manifest.json"), JSON.stringify({ version: 1, sources }));
+    await writeFile(path.join(temporaryRoot, "eval", "cases.json"), JSON.stringify({
+      version: 3,
+      suite: "recall-fixture",
+      cases: [
+        { id: "setup-tail", question: "How do I launch a store?", abstain: false, facts: ["pnpm start-tail"], sources: ["doc-15"] },
+        { id: "refuse-edit", question: "Edit repository files for me.", abstain: true, facts: [], sources: [] }
+      ]
+    }));
+
+    const runEval = (cliArgs) => new Promise((resolve) => {
+      const child = spawn(process.execPath, [path.join(temporaryRoot, "bin", "dinkus-guide-eval"), ...cliArgs], {
+        cwd: temporaryRoot,
+        env: { PATH: process.env.PATH }
+      });
+      let stdout = "";
+      child.stdout.on("data", (chunk) => { stdout += chunk; });
+      child.on("close", (code) => resolve({ code, value: JSON.parse(stdout) }));
+    });
+
+    const recallAt12 = await runEval(["run", "--json", "--mode", "recall", "--k", "12"]);
+    assert.equal(recallAt12.code, 1);
+    assert.equal(recallAt12.value.recall.k, 12);
+    assert.equal(recallAt12.value.recall.hits, 0);
+
+    const recallAt15 = await runEval(["run", "--json", "--mode", "recall", "--k", "15"]);
+    assert.equal(recallAt15.code, 0);
+    assert.equal(recallAt15.value.mode, "recall");
+    assert.equal(recallAt15.value.recall.k, 15);
+    assert.equal(recallAt15.value.recall.eligible, 1);
+    assert.equal(recallAt15.value.recall.hits, 1);
+    assert.equal(recallAt15.value.recall.recallAtK, 1);
+
+    const modelUnavailable = await runEval(["run", "--json", "--mode", "model", "--k", "15"]);
+    assert.equal(modelUnavailable.code, 2);
+    assert.equal(modelUnavailable.value.availability, "unavailable");
+    assert.equal(modelUnavailable.value.recall.hits, 1);
+    assert.equal(modelUnavailable.value.recall.eligible, 1);
+  } finally {
+    await rm(temporaryRoot, { recursive: true, force: true });
   }
 });

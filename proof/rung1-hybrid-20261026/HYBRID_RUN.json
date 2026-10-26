@@ -1,0 +1,66 @@
+{
+  "suite": "corrected-public-development-v3",
+  "suiteVersion": 3,
+  "evaluatedSourceHead": "25c3738b68fc87c36f5f67d31039c5f539ae1bc7",
+  "corpusHash": "dc80b5fa494a7d7d2e90c2ae4e80cc512e217b837100e2101941e51d0ac5a501",
+  "sources": 162,
+  "layers": {
+    "dinkuskit": 56,
+    "transition": 1,
+    "emdash": 105
+  },
+  "chunks": 2138,
+  "embeddingModel": "qwen3-embedding:latest",
+  "embeddingDimensions": 4096,
+  "embedSyncElapsedMs": 213125,
+  "model": "nemotron-3.5-super-vl",
+  "maxTokens": 1024,
+  "enableThinking": false,
+  "modelEvalElapsedMs": 109705,
+  "consumer": "Local OpenAI-compatible loopback forwards to the qwen3-embedding:latest and nemotron-3.5-super-vl test runtimes; no permanent integration or deployment.",
+  "scope": "Public approved MIT source excerpts only; no action tools.",
+  "runs": [
+    {
+      "artifact": "RECALL_BM25.json",
+      "mode": "recall",
+      "retrieval": "fts5-bm25",
+      "k": 12,
+      "passed": 18,
+      "total": 19,
+      "score": 0.9473684210526315
+    },
+    {
+      "artifact": "EXTRACTIVE_BM25.json",
+      "mode": "extractive",
+      "retrieval": "fts5-bm25",
+      "passed": 23,
+      "total": 24,
+      "score": 0.9583333333333334
+    },
+    {
+      "artifact": "RECALL_HYBRID.json",
+      "mode": "recall",
+      "retrieval": "fts5-bm25+qwen3-embedding-rrf",
+      "k": 12,
+      "passed": 19,
+      "total": 19,
+      "score": 1
+    },
+    {
+      "artifact": "EXTRACTIVE_HYBRID.json",
+      "mode": "extractive",
+      "retrieval": "fts5-bm25+qwen3-embedding-rrf",
+      "passed": 24,
+      "total": 24,
+      "score": 1
+    },
+    {
+      "artifact": "MODEL_HYBRID.json",
+      "mode": "model",
+      "retrieval": "fts5-bm25+qwen3-embedding-rrf",
+      "passed": 19,
+      "total": 24,
+      "score": 0.7916666666666666
+    }
+  ]
+}
