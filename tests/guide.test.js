@@ -529,6 +529,7 @@ test("CLI argument-parsing failures preserve JSON error output on stdout", async
     [guideCli, ["ask", "setup", "--bogus", "--json"], /unknown option: --bogus/],
     [guideCli, ["ask", "setup", "--json", "--json"], /duplicate --json/],
     [guideCli, ["ask", "setup", "--mode", "--json"], /missing or duplicate --mode/],
+    [guideCli, ["ask", "   ", "--json"], /expected ask QUESTION/],
     [evalCli, ["--json"], /expected command: run/],
     [evalCli, ["run", "--json", "--bogus"], /unknown option: --bogus/],
     [evalCli, ["run", "--json", "--mode", "invalid"], /mode must be extractive, model, or recall/],

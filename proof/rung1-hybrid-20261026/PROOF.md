@@ -1,6 +1,7 @@
 # DinkusGuide Rung 1 proof (`#2`)
 
 Base: `11babd627bb5a6562a537bd16a2a39f8e126c5a7`
+Evaluated source (`src/` unchanged since): `25c3738b68fc87c36f5f67d31039c5f539ae1bc7`
 Issue: https://github.com/dinkuskit/dinkus-guide/issues/2
 
 ## What exists
@@ -69,6 +70,9 @@ before model synthesis runs.
 - Hybrid Worker B synthesis (`nemotron-3.5-super-vl`, `max_tokens: 1024`,
   thinking disabled): `19/24` (`79.2%`, [MODEL_HYBRID.json](MODEL_HYBRID.json);
   run metadata in [HYBRID_RUN.json](HYBRID_RUN.json)).
+- Source-blind CLI behavior retest: PASS across all contracted clauses with
+  byte-identical cache fingerprint before and after
+  ([INDEPENDENT_PROOF.md](INDEPENDENT_PROOF.md)).
 
 All evaluations use the frozen `corrected-public-development-v3` suite (version
 3, 24 cases; `eval/cases.json` unmodified). Live embedding and model runs used
