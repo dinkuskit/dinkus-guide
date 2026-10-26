@@ -1783,6 +1783,28 @@
       "sha256": "3a837b6f906c56dc593ddbb5d0159642a5da41d059cbeb9d70e576969b715cc5",
       "license": "MIT",
       "provenance": "https://github.com/emdash-cms/emdash/blob/7a04c81372d5ab1f3cdb420a19cd2d857a57e56d/packages/upgrade-emdash/README.md"
+    },
+    {
+      "id": "org-vision",
+      "repository": "dinkuskit/.github",
+      "commit": "344d6f54877d5490449b477c8e43f7409e55cc81",
+      "path": "VISION.md",
+      "layer": "dinkuskit",
+      "status": "active",
+      "sha256": "aad06c8fc9ed30530acca53c0e6722476c52b3c215b13afc86220689110618bf",
+      "license": "MIT",
+      "provenance": "https://github.com/dinkuskit/.github/blob/344d6f54877d5490449b477c8e43f7409e55cc81/VISION.md"
+    },
+    {
+      "id": "org-roadmap",
+      "repository": "dinkuskit/.github",
+      "commit": "344d6f54877d5490449b477c8e43f7409e55cc81",
+      "path": "ROADMAP.md",
+      "layer": "dinkuskit",
+      "status": "active",
+      "sha256": "a2697aa45f9a2e638196e46cd513aedfe9bf438378a760b39de6502d5fd73f40",
+      "license": "MIT",
+      "provenance": "https://github.com/dinkuskit/.github/blob/344d6f54877d5490449b477c8e43f7409e55cc81/ROADMAP.md"
     }
   ]
 }

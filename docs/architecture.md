@@ -8,6 +8,12 @@ MIT `.md`/`.mdx` pins across `dinkuskit/dinkuskit`, `dinkuskit/commerce`,
 `layer` (`dinkuskit`, `emdash`, or `transition`) and `status` (`active` or
 `retired`), plus its operator-populated `.cache/dinkus-guide/` directory.
 
+Org direction context is admitted separately and limited to the explicitly
+licensed `dinkuskit/.github` `VISION.md` and `ROADMAP.md`. Other files from that
+repository are not allowed. This source addition does not change existing
+evaluation cases or their repository coverage. Direction documents describe
+accepted principles and plans; they do not prove shipped capabilities.
+
 ## Corpus hygiene
 
 - **Retired surfaces excluded**: `dinkuskit/blocks` historical API/usage docs,

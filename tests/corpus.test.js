@@ -5,14 +5,19 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { pathToFileURL } from "node:url";
-import { APPROVED_REPOSITORIES, loadManifest, syncCorpus } from "../src/corpus.js";
+import { APPROVED_CONTEXT_DOCUMENTS, APPROVED_REPOSITORIES, loadManifest, syncCorpus } from "../src/corpus.js";
 import { chunkCorpus } from "../src/guide.js";
 
-test("manifest admits all seven approved repositories with explicit layer and status", async () => {
+test("manifest admits seven product/API repositories and only approved org context documents", async () => {
   const manifest = await loadManifest();
   assert.ok(manifest.sources.length >= 160 && manifest.sources.length <= 250);
   const reposPresent = new Set(manifest.sources.map((source) => source.repository));
-  assert.deepEqual(reposPresent, APPROVED_REPOSITORIES);
+  assert.deepEqual(reposPresent, new Set([...APPROVED_REPOSITORIES, ...APPROVED_CONTEXT_DOCUMENTS.keys()]));
+  assert.equal(APPROVED_REPOSITORIES.has("dinkuskit/.github"), false, "context admission must not expand frozen repository coverage");
+  assert.deepEqual(
+    manifest.sources.filter((source) => source.repository === "dinkuskit/.github").map((source) => source.path).sort(),
+    ["ROADMAP.md", "VISION.md"]
+  );
   assert.ok(manifest.sources.every((source) => /^[a-f0-9]{40}$/.test(source.commit)));
   assert.ok(manifest.sources.every((source) => ["dinkuskit", "emdash", "transition"].includes(source.layer)));
   assert.ok(manifest.sources.every((source) => ["active", "retired"].includes(source.status)));
@@ -31,6 +36,27 @@ test("manifest admits all seven approved repositories with explicit layer and st
   ];
   const manifestIds = new Set(manifest.sources.map((source) => source.id));
   for (const id of v1Ids) assert.ok(manifestIds.has(id), `missing preserved v1 source id: ${id}`);
+});
+
+test("org context admission rejects other files from the same repository", async () => {
+  const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "dinkus-context-reject-"));
+  try {
+    await mkdir(path.join(temporaryRoot, "src"));
+    await mkdir(path.join(temporaryRoot, "corpus"));
+    await copyFile(new URL("../src/corpus.js", import.meta.url), path.join(temporaryRoot, "src", "corpus.js"));
+    const baseManifest = JSON.parse(await readFile(new URL("../corpus/manifest.json", import.meta.url), "utf8"));
+    for (const documentPath of ["CONTRIBUTING.md", "LICENSE-DOCUMENTS.md", "profile/README.md", "docs/VISION.md"]) {
+      const manifest = structuredClone(baseManifest);
+      const source = manifest.sources.find((entry) => entry.repository === "dinkuskit/.github");
+      source.path = documentPath;
+      source.provenance = `https://github.com/${source.repository}/blob/${source.commit}/${source.path}`;
+      await writeFile(path.join(temporaryRoot, "corpus", "manifest.json"), JSON.stringify(manifest));
+      const isolated = await import(`${pathToFileURL(path.join(temporaryRoot, "src", "corpus.js")).href}?context=${encodeURIComponent(documentPath)}`);
+      await assert.rejects(isolated.loadManifest(), /invalid manifest source/);
+    }
+  } finally {
+    await rm(temporaryRoot, { recursive: true, force: true });
+  }
 });
 
 test("manifest rejects mismatched layer or invalid status metadata", async () => {

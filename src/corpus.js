@@ -19,6 +19,11 @@ export const APPROVED_REPOSITORIES = new Set([
   "dinkuskit/template-store",
   "emdash-cms/emdash"
 ]);
+// Keep optional org context separate from the product/API repository coverage
+// used by frozen evaluation suites. Only these two public documents are admitted.
+export const APPROVED_CONTEXT_DOCUMENTS = new Map([
+  ["dinkuskit/.github", new Set(["VISION.md", "ROADMAP.md"])]
+]);
 export const ALLOWED_LAYERS = new Set(["dinkuskit", "emdash", "transition"]);
 export const ALLOWED_STATUSES = new Set(["active", "retired"]);
 
@@ -54,7 +59,8 @@ export async function loadManifest() {
   const normalizedSources = [];
   for (const source of manifest.sources) {
     if (!source || ids.has(source.id) || !/^[a-z0-9-]+$/.test(source.id) ||
-      !REPOSITORY.test(source.repository) || !APPROVED_REPOSITORIES.has(source.repository) ||
+      !REPOSITORY.test(source.repository) ||
+      !(APPROVED_REPOSITORIES.has(source.repository) || APPROVED_CONTEXT_DOCUMENTS.get(source.repository)?.has(source.path)) ||
       !COMMIT.test(source.commit) || !/^[A-Za-z0-9._/-]+$/.test(source.path) || source.path.startsWith("/") ||
       source.path.includes("..") || !/\.(?:md|mdx)$/.test(source.path) || !SHA256.test(source.sha256) ||
       source.license !== "MIT" || typeof source.provenance !== "string" ||
