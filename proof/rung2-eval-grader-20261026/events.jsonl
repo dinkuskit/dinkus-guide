@@ -1,3 +1,6 @@
 {"ts":"2026-10-26T21:48:00Z","event":"worktree_created","base":"62050f61726f5f6401359efddf83e71b3c8f41aa","branch":"codex/rung2-eval-grader-20261026"}
 {"ts":"2026-10-26T22:02:22Z","event":"implementation_committed","sha":"ae8623c8eb8d52240ccd52df85d382f92e996a3d","tests":"53/53","devCases":67,"holdoutCases":29}
 {"ts":"2026-10-26T22:18:21Z","event":"live_baselines_completed","evaluatedSha":"ae8623c8eb8d52240ccd52df85d382f92e996a3d","devModel":"38/67","holdoutModel":"21/29","loopbackForwardsClosed":true}
+{"ts":"2026-10-26T22:31:53Z","event":"epoch1_review_adjudicated","reviewedSha":"db7e53fdc3c80699cbf5f9ec6ff3b875243eb933","openclawP3":"0_findings","clawsweeper":"blocked_P1_public_holdout","jevsweeper":"repair","ownerDecision":"externalize_unseen_holdout"}
+{"ts":"2026-10-26T22:47:04Z","event":"repair_committed","sha":"afec26d3340f2fca3f46657c550949536c450bc7","tests":"54/54","devCases":75,"externalHoldoutCases":28}
+{"ts":"2026-10-26T23:00:02Z","event":"epoch2_live_baselines_completed","evaluatedSha":"afec26d3340f2fca3f46657c550949536c450bc7","devModel":"43/75","holdoutSummaryModel":"17/28","loopbackForwardsClosed":true}
