@@ -9,7 +9,7 @@ const args = process.argv.slice(2);
 const selfPath = realpathSync(fileURLToPath(import.meta.url));
 const root = path.resolve(path.dirname(selfPath), "..");
 const cli = path.join(root, "bin", "dinkus-guide");
-const providerUnavailableError = /^(?:model mode requires configured provider|DINKUS_GUIDE_BASE_URL, MODEL, and API_KEY are required|the model alias is retired; use nemotron-3\.5-super-vl|model base URL must be credential-free HTTPS \(or loopback HTTP\)|invalid model base URL|model provider request failed|model provider unavailable \(HTTP \d+\))$/;
+const providerUnavailableError = /^(?:model mode requires configured provider|DINKUS_GUIDE_BASE_URL, MODEL, and API_KEY are required|the model alias is retired; use nemotron-3\.5-super-vl|model base URL must be credential-free HTTPS \(or loopback HTTP\)|invalid model base URL|model provider request failed|model provider unavailable \(HTTP \d+\)|DINKUS_GUIDE_EMBED_BASE_URL and EMBED_MODEL are required|DINKUS_GUIDE_EMBED_API_KEY is required for non-loopback HTTPS embedding endpoints|embedding base URL must be credential-free HTTPS \(or loopback HTTP\)|invalid embedding base URL|embedding provider request failed|embedding provider unavailable \(HTTP \d+\)|corpus embeddings cache is (?:missing|out of date for current chunking); run corpus sync with embedding configuration)$/;
 
 function isMainModule() {
   if (!process.argv[1]) return false;
@@ -21,13 +21,21 @@ function isMainModule() {
 }
 
 function parseArgs() {
-  const values = { json: false, mode: "extractive", modeSet: false, command: null };
+  const values = { json: false, mode: "extractive", modeSet: false, k: 12, kSet: false, command: null };
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
     if (arg === "--json") { if (values.json) throw new Error("duplicate --json"); values.json = true; continue; }
     if (arg === "--mode") {
       if (values.modeSet || index + 1 >= args.length || args[index + 1].startsWith("-")) throw new Error("missing or duplicate --mode");
       values.modeSet = true; values.mode = args[++index]; continue;
+    }
+    if (arg === "--k") {
+      if (values.kSet || index + 1 >= args.length || args[index + 1].startsWith("-")) throw new Error("missing or duplicate --k");
+      values.kSet = true;
+      const parsedK = Number(args[++index]);
+      if (!Number.isInteger(parsedK) || parsedK < 1 || parsedK > 50) throw new Error("k must be an integer between 1 and 50");
+      values.k = parsedK;
+      continue;
     }
     if (arg.startsWith("-")) throw new Error(`unknown option: ${arg}`);
     if (values.command) throw new Error(`unexpected argument: ${arg}`);
@@ -59,44 +67,29 @@ export function evidenceForCitations(evidence, citations) {
     citation.endLine === item.endLine));
 }
 
-if (isMainModule()) {
-const jsonOutput = args.includes("--json");
-const failUsage = (message) => {
-  if (jsonOutput) console.log(JSON.stringify({ status: "error", error: message }));
-  else console.error(`dinkus-guide-eval: ${message}`);
-  process.exit(2);
-};
-let options;
-try { options = parseArgs(); } catch (error) { failUsage(error.message); }
-if (!args.length) {
-  console.log("Usage: dinkus-guide-eval run [--json] [--mode extractive|model]");
-  process.exit(0);
-}
-if (options.command === null) failUsage("expected command: run");
-if (options.command !== "run") failUsage(`unexpected command: ${options.command}`);
-if (!["extractive", "model"].includes(options.mode)) failUsage("mode must be extractive or model");
-
-const suite = JSON.parse(await readFile(path.join(root, "eval", "cases.json"), "utf8"));
-const corpusRun = await runCli(["corpus", "verify", "--json"]);
-if (corpusRun.code !== 0) {
-  const report = { suite: suite.suite, suiteVersion: suite.version, mode: options.mode, availability: "unavailable",
-    reason: corpusRun.value.error || corpusRun.stderr, total: suite.cases.length, passed: 0, score: null, results: [] };
-  console.log(options.json ? JSON.stringify(report) : `unavailable: ${report.reason}`);
-  process.exit(2);
+export function computeRecallCase(test, evidence, k = 12) {
+  const topEvidence = (evidence ?? []).slice(0, k);
+  const retrievedIds = [...new Set(topEvidence.map((item) => item.sourceId))];
+  const sourcesMatched = test.sources.filter((source) => retrievedIds.includes(source)).length;
+  const searchable = topEvidence.map((item) => item.excerpt).join("\n").toLowerCase().replace(/\s+/g, " ");
+  const factsInEvidence = test.facts.filter((fact) => searchable.includes(fact.toLowerCase().replace(/\s+/g, " "))).length;
+  const sourceHit = sourcesMatched === test.sources.length;
+  const spanFactHit = factsInEvidence === test.facts.length;
+  return {
+    id: test.id,
+    k,
+    sourcesMatched,
+    sourcesRequired: test.sources.length,
+    factsInEvidence,
+    factsRequired: test.facts.length,
+    sourceHit,
+    spanFactHit,
+    hit: sourceHit && spanFactHit
+  };
 }
 
-const results = [];
-const modelIdentities = new Set();
-for (const test of suite.cases) {
-  const run = await runGuide(test.question, options.mode);
+function scoreGuideRun(test, run) {
   const value = run.value;
-  if (value.modelIdentity) modelIdentities.add(value.modelIdentity);
-  if (options.mode === "model" && run.code === 4 && providerUnavailableError.test(value.error || "")) {
-    const report = { suite: suite.suite, suiteVersion: suite.version, mode: options.mode, availability: "unavailable",
-      reason: value.error, total: suite.cases.length, passed: 0, score: null, results: [] };
-    console.log(options.json ? JSON.stringify(report) : `unavailable: ${report.reason}`);
-    process.exit(2);
-  }
   const citations = value.citations ?? [];
   const citedIds = [...new Set(citations.map((citation) => citation.sourceId))];
   const citedEvidence = evidenceForCitations(value.evidence, citations);
@@ -107,14 +100,132 @@ for (const test of suite.cases) {
   const citationPass = test.abstain ? citedIds.length === 0 : requiredSources.length === test.sources.length;
   const abstentionPass = test.abstain ? value.status === "insufficient_evidence" : value.status === "answered";
   const exitPass = run.code === 0;
-  results.push({ id: test.id, status: value.status ?? "error", factsMatched: facts.length, factsRequired: test.facts.length,
-    citationsMatched: requiredSources.length, citationsRequired: test.abstain ? 0 : test.sources.length,
-    abstentionPass, citationPass, exitCode: run.code, pass: exitPass && facts.length === test.facts.length && citationPass && abstentionPass });
+  return {
+    id: test.id,
+    status: value.status ?? "error",
+    factsMatched: facts.length,
+    factsRequired: test.facts.length,
+    citationsMatched: requiredSources.length,
+    citationsRequired: test.abstain ? 0 : test.sources.length,
+    abstentionPass,
+    citationPass,
+    exitCode: run.code,
+    pass: exitPass && facts.length === test.facts.length && citationPass && abstentionPass
+  };
 }
+
+if (isMainModule()) {
+const jsonOutput = args.includes("--json");
+const failUsage = (message) => {
+  if (jsonOutput) console.log(JSON.stringify({ status: "error", error: message }));
+  else console.error(`dinkus-guide-eval: ${message}`);
+  process.exit(2);
+};
+let options;
+try { options = parseArgs(); } catch (error) { failUsage(error.message); }
+if (!args.length) {
+  console.log("Usage: dinkus-guide-eval run [--json] [--mode extractive|model|recall] [--k 12]");
+  process.exit(0);
+}
+if (options.command === null) failUsage("expected command: run");
+if (options.command !== "run") failUsage(`unexpected command: ${options.command}`);
+if (!["extractive", "model", "recall"].includes(options.mode)) failUsage("mode must be extractive, model, or recall");
+
+const suite = JSON.parse(await readFile(path.join(root, "eval", "cases.json"), "utf8"));
+const corpusRun = await runCli(["corpus", "verify", "--json"]);
+if (corpusRun.code !== 0) {
+  const report = { suite: suite.suite, suiteVersion: suite.version, mode: options.mode, availability: "unavailable",
+    reason: corpusRun.value.error || corpusRun.stderr, total: suite.cases.length, passed: 0, score: null, results: [] };
+  console.log(options.json ? JSON.stringify(report) : `unavailable: ${report.reason}`);
+  process.exit(2);
+}
+
+// Step 1: Standalone retrieval recall@k before any model synthesis runs
+const extractiveRuns = [];
+const recallCases = [];
+for (const test of suite.cases) {
+  const run = await runGuide(test.question, "extractive");
+  if ((run.code === 3 || run.code === 4) && providerUnavailableError.test(run.value.error || "")) {
+    const report = { suite: suite.suite, suiteVersion: suite.version, mode: options.mode, availability: "unavailable",
+      reason: run.value.error, total: suite.cases.length, passed: 0, score: null, results: [] };
+    console.log(options.json ? JSON.stringify(report) : `unavailable: ${report.reason}`);
+    process.exit(2);
+  }
+  extractiveRuns.push({ test, run });
+  if (!test.abstain) {
+    recallCases.push(computeRecallCase(test, run.value.evidence, options.k));
+  }
+}
+
+const sourceHits = recallCases.filter((item) => item.sourceHit).length;
+const spanHits = recallCases.filter((item) => item.hit).length;
+const recall = {
+  k: options.k,
+  eligible: recallCases.length,
+  sourceHits,
+  sourceRecallAtK: recallCases.length ? sourceHits / recallCases.length : 1,
+  hits: spanHits,
+  recallAtK: recallCases.length ? spanHits / recallCases.length : 1,
+  cases: recallCases
+};
+
+if (!options.json) {
+  console.log(`recall@${options.k}: ${spanHits}/${recallCases.length} (${(recall.recallAtK * 100).toFixed(1)}%), sourceRecall@${options.k}: ${sourceHits}/${recallCases.length} (${(recall.sourceRecallAtK * 100).toFixed(1)}%)`);
+}
+
+if (options.mode === "recall") {
+  const report = {
+    suite: suite.suite,
+    suiteVersion: suite.version,
+    mode: "recall",
+    availability: "available",
+    corpusHash: corpusRun.value.corpusHash ?? null,
+    total: recall.eligible,
+    passed: recall.hits,
+    score: recall.recallAtK,
+    recall,
+    results: recall.cases
+  };
+  if (options.json) console.log(JSON.stringify(report));
+  process.exit(recall.hits === recall.eligible ? 0 : 1);
+}
+
+// Step 2: Score extractive or run Worker B model synthesis
+const results = [];
+const modelIdentities = new Set();
+if (options.mode === "extractive") {
+  for (const { test, run } of extractiveRuns) {
+    results.push(scoreGuideRun(test, run));
+  }
+} else {
+  for (const test of suite.cases) {
+    const run = await runGuide(test.question, "model");
+    const value = run.value;
+    if (value.modelIdentity) modelIdentities.add(value.modelIdentity);
+    if ((run.code === 3 || run.code === 4) && providerUnavailableError.test(value.error || "")) {
+      const report = { suite: suite.suite, suiteVersion: suite.version, mode: options.mode, availability: "unavailable",
+        reason: value.error, recall, total: suite.cases.length, passed: 0, score: null, results: [] };
+      console.log(options.json ? JSON.stringify(report) : `unavailable: ${report.reason}`);
+      process.exit(2);
+    }
+    results.push(scoreGuideRun(test, run));
+  }
+}
+
 const passed = results.filter((result) => result.pass).length;
-const report = { suite: suite.suite, suiteVersion: suite.version, mode: options.mode, availability: "available",
-  modelIdentity: options.mode === "model" ? [...modelIdentities] : undefined, corpusHash: corpusRun.value.corpusHash ?? null,
-  total: results.length, passed, score: passed / results.length, results };
+const report = {
+  suite: suite.suite,
+  suiteVersion: suite.version,
+  mode: options.mode,
+  availability: "available",
+  modelIdentity: options.mode === "model" ? [...modelIdentities] : undefined,
+  corpusHash: corpusRun.value.corpusHash ?? null,
+  recall,
+  total: results.length,
+  passed,
+  score: passed / results.length,
+  results
+};
 if (options.json) console.log(JSON.stringify(report));
 else console.log(`${passed}/${results.length} passed (${(report.score * 100).toFixed(1)}%) in ${options.mode} mode`);
 process.exit(passed === results.length ? 0 : 1);
