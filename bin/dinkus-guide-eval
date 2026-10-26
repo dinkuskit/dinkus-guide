@@ -106,8 +106,12 @@ function parseArgs(rawArgs = args) {
       values.checkDisjoint.push(rawArgs[++index]);
       continue;
     }
-    if (arg.startsWith("-")) throw new Error(`unknown option: ${arg}`);
-    if (values.command) throw new Error(`unexpected argument: ${arg}`);
+    if (arg.startsWith("-")) {
+      throw new Error(values.summaryOnly || rawArgs.includes("--summary-only") ? "unknown CLI option" : `unknown option: ${arg}`);
+    }
+    if (values.command) {
+      throw new Error(values.summaryOnly || rawArgs.includes("--summary-only") ? "unexpected positional argument" : `unexpected argument: ${arg}`);
+    }
     values.command = arg;
   }
   return values;
@@ -134,25 +138,27 @@ export function verifySuiteStratification(label, suite, {
   maxCases,
   expectedRole,
   sourceRepositories = null,
-  requiredRepositories = APPROVED_EVAL_REPOSITORIES
+  requiredRepositories = APPROVED_EVAL_REPOSITORIES,
+  redactCaseDetails = false
 } = {}) {
+  const safeLabel = redactCaseDetails ? "<external-suite>" : label;
   if (expectedRole && suite.role !== expectedRole) {
-    throw new Error(`${label} must declare role="${expectedRole}"`);
+    throw new Error(`${safeLabel} must declare role="${expectedRole}"`);
   }
   if (minCases !== undefined && maxCases !== undefined) {
     if (suite.cases.length < minCases || suite.cases.length > maxCases) {
-      throw new Error(`${label} must contain ${minCases}-${maxCases} cases (got ${suite.cases.length})`);
+      throw new Error(`${safeLabel} must contain ${minCases}-${maxCases} cases (got ${suite.cases.length})`);
     }
   }
   if (suite.role === "locked_promotion_exam") {
     if (typeof suite.policy !== "string" || !/Rung 3/i.test(suite.policy) || !/Rung 4/i.test(suite.policy)) {
-      throw new Error(`${label} must declare its Rung 3 / Rung 4 locked promotion exam policy`);
+      throw new Error(`${safeLabel} must declare its Rung 3 / Rung 4 locked promotion exam policy`);
     }
   }
   const categories = new Set(suite.cases.map((item) => item.category));
   for (const cat of ALLOWED_CATEGORIES) {
     if (!categories.has(cat)) {
-      throw new Error(`${label} is missing required category: ${cat}`);
+      throw new Error(`${safeLabel} is missing required category: ${cat}`);
     }
   }
   if (sourceRepositories) {
@@ -166,7 +172,7 @@ export function verifySuiteStratification(label, suite, {
     }
     for (const repo of requiredRepositories) {
       if (!coveredRepos.has(repo)) {
-        throw new Error(`${label} is missing repository coverage for ${repo}`);
+        throw new Error(`${safeLabel} is missing repository coverage for ${repo}`);
       }
     }
   }
@@ -175,7 +181,8 @@ export function verifySuiteStratification(label, suite, {
 
 export function assertSuitesDisjoint(primarySuite, referenceSuite, {
   primaryLabel = primarySuite?.suite ?? "primary",
-  referenceLabel = referenceSuite?.suite ?? "reference"
+  referenceLabel = referenceSuite?.suite ?? "reference",
+  redactCaseDetails = false
 } = {}) {
   if (!primarySuite?.cases || !referenceSuite?.cases) {
     throw new Error("both suites must provide cases arrays for disjointness verification");
@@ -184,16 +191,29 @@ export function assertSuitesDisjoint(primarySuite, referenceSuite, {
   const refQuestions = new Set(referenceSuite.cases.map((item) => normalizeText(item.question)));
   for (const item of primarySuite.cases) {
     if (refIds.has(item.id)) {
-      throw new Error(`duplicate case id across ${primaryLabel} and ${referenceLabel}: ${item.id}`);
+      throw new Error(
+        redactCaseDetails
+          ? "duplicate case id detected across compared suites"
+          : `duplicate case id across ${primaryLabel} and ${referenceLabel}: ${item.id}`
+      );
     }
     if (refQuestions.has(normalizeText(item.question))) {
-      throw new Error(`duplicate question across ${primaryLabel} and ${referenceLabel}: ${item.id}`);
+      throw new Error(
+        redactCaseDetails
+          ? "duplicate question detected across compared suites"
+          : `duplicate question across ${primaryLabel} and ${referenceLabel}: ${item.id}`
+      );
     }
   }
   return true;
 }
 
-export function validateSuite(suite, { manifestIds = null, sourceRepositories = null, requireCategories = false } = {}) {
+export function validateSuite(suite, {
+  manifestIds = null,
+  sourceRepositories = null,
+  requireCategories = false,
+  redactCaseDetails = false
+} = {}) {
   if (!suite || typeof suite !== "object" || Array.isArray(suite)) {
     throw new Error("evaluation suite must be a JSON object");
   }
@@ -218,73 +238,78 @@ export function validateSuite(suite, { manifestIds = null, sourceRepositories = 
       throw new Error("evaluation case requires a non-empty id");
     }
     if (seenIds.has(item.id)) {
-      throw new Error(`duplicate evaluation case id: ${item.id}`);
+      throw new Error(redactCaseDetails ? "duplicate evaluation case id" : `duplicate evaluation case id: ${item.id}`);
     }
     seenIds.add(item.id);
+    const casePrefix = redactCaseDetails ? "suite case" : `case ${item.id}`;
 
     if (typeof item.question !== "string" || !item.question.trim()) {
-      throw new Error(`case ${item.id}: question must be non-empty`);
+      throw new Error(`${casePrefix}: question must be non-empty`);
     }
     const normalizedQuestion = normalizeText(item.question);
     if (seenQuestions.has(normalizedQuestion)) {
-      throw new Error(`case ${item.id}: duplicate question text`);
+      throw new Error(`${casePrefix}: duplicate question text`);
     }
     seenQuestions.add(normalizedQuestion);
 
     if (typeof item.abstain !== "boolean") {
-      throw new Error(`case ${item.id}: abstain must be boolean`);
+      throw new Error(`${casePrefix}: abstain must be boolean`);
     }
     if (item.expectedStatus !== undefined) {
       const expectedForAbstain = item.abstain ? "insufficient_evidence" : "answered";
       if (item.expectedStatus !== expectedForAbstain) {
-        throw new Error(`case ${item.id}: expectedStatus must match abstain (${expectedForAbstain})`);
+        throw new Error(`${casePrefix}: expectedStatus must match abstain (${expectedForAbstain})`);
       }
     }
     if (enforceV4 || item.category !== undefined) {
       if (!ALLOWED_CATEGORIES.has(item.category)) {
-        throw new Error(`case ${item.id}: invalid or missing category`);
+        throw new Error(`${casePrefix}: invalid or missing category`);
       }
       const isAbstentionCategory = item.category === "honest_abstention" || item.category === "boundary_refusal";
       if (item.abstain !== isAbstentionCategory) {
-        throw new Error(`case ${item.id}: category ${item.category} disagrees with abstain=${item.abstain}`);
+        throw new Error(
+          redactCaseDetails
+            ? `${casePrefix}: category disagrees with abstain=${item.abstain}`
+            : `${casePrefix}: category ${item.category} disagrees with abstain=${item.abstain}`
+        );
       }
     }
 
     if (!Array.isArray(item.facts) || item.facts.some((fact) => typeof fact !== "string" || !fact.trim())) {
-      throw new Error(`case ${item.id}: facts must be an array of non-empty strings`);
+      throw new Error(`${casePrefix}: facts must be an array of non-empty strings`);
     }
     if (!item.abstain && enforceV4 && item.facts.length < 2) {
-      throw new Error(`case ${item.id}: answerable v4 cases require at least 2 specific facts`);
+      throw new Error(`${casePrefix}: answerable v4 cases require at least 2 specific facts`);
     }
 
     if (item.forbiddenFacts !== undefined) {
       if (!Array.isArray(item.forbiddenFacts) || item.forbiddenFacts.some((fact) => typeof fact !== "string" || !fact.trim())) {
-        throw new Error(`case ${item.id}: forbiddenFacts must be an array of non-empty strings`);
+        throw new Error(`${casePrefix}: forbiddenFacts must be an array of non-empty strings`);
       }
     }
 
     const sources = item.sources ?? [];
     if (!Array.isArray(sources) || sources.some((src) => typeof src !== "string" || !src.trim())) {
-      throw new Error(`case ${item.id}: sources must be an array of source IDs`);
+      throw new Error(`${casePrefix}: sources must be an array of source IDs`);
     }
     const anyOfSources = item.anyOfSources ?? [];
     if (!Array.isArray(anyOfSources) || anyOfSources.some((group) =>
       !Array.isArray(group) || !group.length || group.some((src) => typeof src !== "string" || !src.trim())
     )) {
-      throw new Error(`case ${item.id}: anyOfSources must be an array of non-empty source ID arrays`);
+      throw new Error(`${casePrefix}: anyOfSources must be an array of non-empty source ID arrays`);
     }
 
     if (item.abstain && (sources.length > 0 || anyOfSources.length > 0)) {
-      throw new Error(`case ${item.id}: abstention cases cannot require sources or anyOfSources`);
+      throw new Error(`${casePrefix}: abstention cases cannot require sources or anyOfSources`);
     }
     if (!item.abstain && sources.length + anyOfSources.length === 0) {
-      throw new Error(`case ${item.id}: answerable cases require sources or anyOfSources`);
+      throw new Error(`${casePrefix}: answerable cases require sources or anyOfSources`);
     }
 
     if (manifestIds) {
       for (const src of [...sources, ...anyOfSources.flat()]) {
         if (!manifestIds.has(src)) {
-          throw new Error(`case ${item.id}: unknown corpus sourceId ${src}`);
+          throw new Error(redactCaseDetails ? `${casePrefix}: unknown corpus sourceId` : `${casePrefix}: unknown corpus sourceId ${src}`);
         }
       }
     }
@@ -295,7 +320,8 @@ export function validateSuite(suite, { manifestIds = null, sourceRepositories = 
       minCases: 25,
       maxCases: 30,
       expectedRole: "locked_promotion_exam",
-      sourceRepositories
+      sourceRepositories,
+      redactCaseDetails
     });
   }
   return suite;
@@ -417,6 +443,42 @@ export function verifyCitationSpan(citation, corpusSources = null) {
   };
 }
 
+const ABSTENTION_REFUSAL_CUE_RE = /\b(?:cannot|can't|unable\s+to|read-only|text-only|does\s+not\s+(?:contain|include|document|provide|cover|support|specify|describe|mention|have|allow|perform|access|inspect|store|expose)|do\s+not\s+(?:contain|include|document|provide|cover|support|specify|describe|mention|have|allow|perform|access|inspect|store|expose)|not\s+(?:documented|supported|present|provided|available|mentioned|covered|included|built|specified|found|permitted|allowed|able)|no\s+(?:documented|documentation|evidence|information|support|record|mention|details|instructions)|insufficient\s+evidence|unverified|unsupported|outside\s+the\s+pinned|refuse[sd]?)\b/i;
+
+const ABSTENTION_SENTENCE_CUE_RE = /\b(?:cannot|can't|unable\s+to|read-only|text-only|does\s+not|do\s+not|is\s+not|are\s+not|not\s+(?:documented|supported|present|provided|available|mentioned|covered|included|built|specified|found|permitted|allowed|able)|no\s+(?:documented|documentation|evidence|information|support|record|mention|details|instructions)|insufficient\s+evidence|unverified|unsupported|outside\s+the\s+pinned|refuse[sd]?|only\s+(?:covers?|documents?|describes?|supports?|mentions?|addresses?|applies|includes?))\b|^provide\s+a\s+documented\s+text\s+contract\s+or\s+consult\s+the\s+pinned\s+(?:public\s+)?sources\.?$/i;
+
+const ABSTENTION_DISALLOWED_CONTENT_RE = /```|https?:\/\/|(?:^|\n)\s*(?:[-*]\s+|\d+[.)]\s+|step\s+\d+\b)|\$\s*\d+|\b[A-Z][A-Z0-9_]{2,}\s*=|\b(?:wrangler|pnpm|npm|npx|curl|git)\s+(?:deploy|secret|push|commit|install|add|exec|run)\b|\b(?:however|nevertheless|meanwhile|typically\s+you|workaround|try\s+running|here\s+(?:is|are)\s+(?:how|the|your|a\s+sample))\b|\b(?:i\s+(?:have\s+)?(?:deployed|edited|created|deleted|exported|updated|executed|inspected|retrieved)|order\s+#\d+|sk_(?:live|test)_[A-Za-z0-9_]*|whsec_[A-Za-z0-9_]*|ec_pat_[A-Za-z0-9_]*|dk_store_[A-Za-z0-9_]*|Bearer\s+[A-Za-z0-9._-]{6,})\b/i;
+
+export function verifyAbstentionAnswer(answer) {
+  if (typeof answer !== "string") {
+    return { valid: false, reason: "missing_abstention_answer" };
+  }
+  const trimmed = answer.trim();
+  if (!trimmed) {
+    return { valid: false, reason: "empty_abstention_answer" };
+  }
+  if (trimmed.length > 420) {
+    return { valid: false, reason: "excessive_abstention_length" };
+  }
+  if (ABSTENTION_DISALLOWED_CONTENT_RE.test(trimmed)) {
+    return { valid: false, reason: "substantive_or_sensitive_content_in_abstention" };
+  }
+  if (!ABSTENTION_REFUSAL_CUE_RE.test(trimmed)) {
+    return { valid: false, reason: "missing_explicit_refusal_or_abstention_cue" };
+  }
+  const sentences = trimmed
+    .split(/(?<=[.!?])\s+|\r?\n+/)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+  if (!sentences.length || sentences.length > 3) {
+    return { valid: false, reason: "excessive_abstention_sentences" };
+  }
+  if (sentences.some((sentence) => !ABSTENTION_SENTENCE_CUE_RE.test(sentence))) {
+    return { valid: false, reason: "unconstrained_abstention_sentence" };
+  }
+  return { valid: true, reason: null };
+}
+
 export function scoreGuideRun(test, run, { corpusSources = null, recallCase = null } = {}) {
   const value = run?.value ?? {};
   const citations = Array.isArray(value.citations) ? value.citations : [];
@@ -473,7 +535,11 @@ export function scoreGuideRun(test, run, { corpusSources = null, recallCase = nu
 
   const expectedStatus = test.expectedStatus ?? (test.abstain ? "insufficient_evidence" : "answered");
   const exitPass = run?.code === 0 && value.status !== "error";
-  const abstentionPass = exitPass && value.status === expectedStatus;
+  const abstentionAnswerCheck = test.abstain
+    ? verifyAbstentionAnswer(rawAnswer)
+    : { valid: true, reason: null };
+  const abstentionAnswerValid = abstentionAnswerCheck.valid;
+  const abstentionPass = exitPass && value.status === expectedStatus && abstentionAnswerValid;
   const pass = exitPass && abstentionPass && factPass && citationPass;
 
   let failureBucket = null;
@@ -500,6 +566,7 @@ export function scoreGuideRun(test, run, { corpusSources = null, recallCase = nu
     citationsRequired: test.abstain ? 0 : sourceMatch.required,
     invalidCitations: invalidCitations.length,
     citationSpanValid,
+    abstentionAnswerValid,
     abstentionPass,
     citationPass,
     factPass,
@@ -607,7 +674,9 @@ if (isMainModule()) {
     process.exit(0);
   }
   if (options.command === null) failUsage("expected command: run");
-  if (options.command !== "run") failUsage(`unexpected command: ${options.command}`);
+  if (options.command !== "run") {
+    failUsage(options.summaryOnly ? "unexpected command" : `unexpected command: ${options.command}`);
+  }
   if (!["extractive", "model", "retrieval", "recall"].includes(options.mode)) {
     failUsage("mode must be extractive, model, retrieval, or recall");
   }
@@ -629,7 +698,7 @@ if (isMainModule()) {
   try {
     let parsedSuite;
     try { parsedSuite = JSON.parse(rawSuiteText); } catch { throw new Error("suite is not valid JSON"); }
-    suite = validateSuite(parsedSuite);
+    suite = validateSuite(parsedSuite, { redactCaseDetails: options.summaryOnly });
   } catch (error) {
     failUsage(`invalid suite (${suiteFile}): ${error.message}`);
   }
@@ -647,10 +716,14 @@ if (isMainModule()) {
     try {
       let parsedRef;
       try { parsedRef = JSON.parse(rawRefText); } catch { throw new Error("suite is not valid JSON"); }
-      const refSuite = validateSuite(parsedRef);
-      assertSuitesDisjoint(suite, refSuite, { primaryLabel: suite.suite, referenceLabel: refSuite.suite });
+      const refSuite = validateSuite(parsedRef, { redactCaseDetails: options.summaryOnly });
+      assertSuitesDisjoint(suite, refSuite, {
+        primaryLabel: suite.suite,
+        referenceLabel: refSuite.suite,
+        redactCaseDetails: options.summaryOnly
+      });
       disjointFrom.push({
-        suite: refSuite.suite,
+        suite: options.summaryOnly && refLabel === "<external-suite>" ? "<external-suite>" : refSuite.suite,
         suiteFile: refLabel,
         suiteSha256: sha256Text(rawRefText),
         cases: refSuite.cases.length
@@ -662,6 +735,9 @@ if (isMainModule()) {
 
   const corpusRun = await runCli(["corpus", "verify", "--json"]);
   if (corpusRun.code !== 0) {
+    const fallbackReason = options.summaryOnly
+      ? (corpusRun.value.error || "corpus verification failed")
+      : (corpusRun.value.error || corpusRun.stderr);
     const report = {
       suite: suite.suite,
       suiteFile,
@@ -672,7 +748,7 @@ if (isMainModule()) {
       ...(disjointFrom.length ? { disjointFrom } : {}),
       mode: options.mode,
       availability: "unavailable",
-      reason: corpusRun.value.error || corpusRun.stderr,
+      reason: fallbackReason,
       total: suite.cases.length,
       passed: 0,
       failed: 0,
@@ -687,7 +763,8 @@ if (isMainModule()) {
   try {
     validateSuite(suite, {
       manifestIds: new Set(corpusSources.keys()),
-      sourceRepositories: corpusSources
+      sourceRepositories: corpusSources,
+      redactCaseDetails: options.summaryOnly
     });
   } catch (error) {
     failUsage(`invalid suite (${suiteFile}): ${error.message}`);

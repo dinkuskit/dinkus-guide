@@ -19,8 +19,9 @@ testing across two disjoint v4 suites:
   explicit Rung 3 / Rung 4 policy metadata for `role: "locked_promotion_exam"`,
   `--check-disjoint eval/cases.json` enforces zero duplicate case IDs or
   normalized question strings, and `--summary-only` emits aggregate scores,
-  buckets, and `suiteSha256` without exposing unseen case IDs, questions, or
-  gold expectations.
+  buckets, and `suiteSha256` while redacting case-derived diagnostics on both
+  successful and failed runs so unseen case IDs, questions, suite labels, and
+  gold expectations never appear on stdout or stderr.
 
 ## Question categories & core guardrails
 
@@ -89,7 +90,10 @@ imports ranking or answer functions from `src/`.
    - `schema_error` — Model output failed strict JSON or citation schema
      validation (exit code `4`).
    - `abstention_error` — False abstention (`insufficient_evidence` on an
-     answerable case) or false answer (`answered` on an `abstain: true` case).
+     answerable case), false answer (`answered` on an `abstain: true` case), or
+     an unconstrained `abstain: true` answer body that omits explicit
+     refusal/insufficient-evidence cues or leaks substantive, procedural, URL,
+     code, pricing, or secret-like content (`verifyAbstentionAnswer`).
    - `citation_miss` — Returned citations had an invalid or out-of-bounds line
      span, or missed a required `sources` / `anyOfSources` group after facts
      passed.
