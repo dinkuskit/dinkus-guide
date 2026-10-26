@@ -4,3 +4,6 @@
 {"ts":"2026-10-26T22:31:53Z","event":"epoch1_review_adjudicated","reviewedSha":"db7e53fdc3c80699cbf5f9ec6ff3b875243eb933","openclawP3":"0_findings","clawsweeper":"blocked_P1_public_holdout","jevsweeper":"repair","ownerDecision":"externalize_unseen_holdout"}
 {"ts":"2026-10-26T22:47:04Z","event":"repair_committed","sha":"afec26d3340f2fca3f46657c550949536c450bc7","tests":"54/54","devCases":75,"externalHoldoutCases":28}
 {"ts":"2026-10-26T23:00:02Z","event":"epoch2_live_baselines_completed","evaluatedSha":"afec26d3340f2fca3f46657c550949536c450bc7","devModel":"43/75","holdoutSummaryModel":"17/28","loopbackForwardsClosed":true}
+{"ts":"2026-10-26T23:08:09Z","event":"epoch2_review_outcomes","reviewedSha":"4b58193606e9aafb30ee86c54c793907703a4235","ciVerify":"pass","openclawP3":"0_findings_0.84","clawsweeperDispatch":"base_moved_during_admission_pr10_9efdaebf"}
+{"ts":"2026-10-26T23:10:14Z","event":"base_synchronized","base":"9efdaebf02980a5d2f3b493f595a2033e7873217","sha":"bd1b89877f1163c9e7dbd2733f79d14ef3484416","sources":164,"tests":"55/55"}
+{"ts":"2026-10-26T23:25:22Z","event":"epoch3_live_baselines_completed","evaluatedSha":"bd1b89877f1163c9e7dbd2733f79d14ef3484416","devModel":"45/75","holdoutSummaryModel":"16/28","loopbackForwardsClosed":true}
