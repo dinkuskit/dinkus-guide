@@ -123,6 +123,12 @@ provider transcripts are stored.
   reported 1 `P3` finding (`CS-1`: per-repository manifest counts in `PROOF.md`),
   classified by JevSweeper (`jev-1.13.0`) as `repair` (`2/2` boxes) and repaired
   together in Epoch 5 ([REVIEW_4.md](REVIEW_4.md)).
-- Epoch 5 batches the `OC-3` and `CS-1` repairs for exact-head CI, comprehensive
-  `P3` OpenClaw review, native ClawSweeper review, and JevSweeper disposition
-  before human merge decision. No merge or deployment has occurred.
+- Epoch 5 (`e4b690c89400252e16545b2825c7160b39221691`): GitHub CI passed; native
+  ClawSweeper (`#issuecomment-6421682671` Revision 2) reached `Ready for
+  maintainer review` (`0` findings, JevSweeper `no-leftovers`); comprehensive
+  `P3` OpenClaw review (`req-20261026T165422Z-22770784078`) reported 1 `P3`
+  finding (`OC-4`: classify `syncCorpusEmbeddings` provider/output failures as
+  exit code `4`), repaired and regression-tested in Epoch 6 ([REVIEW_5.md](REVIEW_5.md)).
+- Epoch 6 verifies the `OC-4` exit-code refinement across exact-head CI,
+  comprehensive `P3` OpenClaw review, native ClawSweeper review, and JevSweeper
+  disposition before human merge decision. No merge or deployment has occurred.

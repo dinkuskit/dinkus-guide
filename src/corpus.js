@@ -216,20 +216,27 @@ export async function syncCorpusEmbeddings(corpus, { embedTransport, chunkCorpus
   let dimensions = null;
   for (let start = 0; start < chunks.length; start += batchSize) {
     const slice = chunks.slice(start, start + batchSize);
-    const response = await embedTransport({ inputs: slice.map((chunk) => chunk.embedText) });
+    let response;
+    try {
+      response = await embedTransport({ inputs: slice.map((chunk) => chunk.embedText) });
+    } catch (error) {
+      throw Object.assign(new Error(error?.message ?? String(error)), { code: Number.isInteger(error?.code) ? error.code : 4 });
+    }
     if (!response || !Array.isArray(response.vectors) || response.vectors.length !== slice.length ||
         typeof response.model !== "string" || !response.model.trim()) {
-      throw new Error("embedding provider returned an invalid batch response");
+      throw Object.assign(new Error("embedding provider returned an invalid batch response"), { code: 4 });
     }
     const batchModel = response.model.trim();
     if (modelIdentity === null) modelIdentity = batchModel;
-    else if (modelIdentity !== batchModel) throw new Error("embedding provider changed model identity mid-sync");
+    else if (modelIdentity !== batchModel) {
+      throw Object.assign(new Error("embedding provider changed model identity mid-sync"), { code: 4 });
+    }
     requestedModel = response.requestedModel ?? requestedModel;
     for (let idx = 0; idx < slice.length; idx += 1) {
       const vector = response.vectors[idx];
       if (dimensions === null) dimensions = Array.isArray(vector) ? vector.length : 0;
       if (!validateEmbeddingVector(vector, dimensions)) {
-        throw new Error("embedding provider returned an invalid vector");
+        throw Object.assign(new Error("embedding provider returned an invalid vector"), { code: 4 });
       }
       encoded.push({ key: slice[idx].key, vector: vector.map((val) => Number(val.toPrecision(7))) });
     }

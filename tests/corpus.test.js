@@ -172,6 +172,39 @@ test("embeddings cache syncs in batches, verifies corpusHash/symlinks, and recov
     assert.equal(synced.embeddings.dimensions, 3);
     assert.equal(synced.embeddings.vectors.size, 10);
 
+    // Provider/output failures during syncCorpusEmbeddings propagate exit code 4
+    await assert.rejects(
+      isolated.syncCorpusEmbeddings(synced, {
+        chunkCorpusImpl: chunkCorpus,
+        batchSize: 4,
+        embedTransport: (() => {
+          let batch = 0;
+          return async ({ inputs }) => ({
+            model: (batch++ === 0) ? "qwen3-embedding:0.6b" : "qwen3-embedding:drifted",
+            vectors: inputs.map(() => [1, 0.2, 0.5])
+          });
+        })()
+      }),
+      (err) => err.code === 4 && /changed model identity mid-sync/.test(err.message)
+    );
+    await assert.rejects(
+      isolated.syncCorpusEmbeddings(synced, {
+        chunkCorpusImpl: chunkCorpus,
+        embedTransport: async () => ({ model: "qwen3-embedding:0.6b", vectors: [] })
+      }),
+      (err) => err.code === 4 && /invalid batch response/.test(err.message)
+    );
+    await assert.rejects(
+      isolated.syncCorpusEmbeddings(synced, {
+        chunkCorpusImpl: chunkCorpus,
+        embedTransport: async ({ inputs }) => ({
+          model: "qwen3-embedding:0.6b",
+          vectors: inputs.map(() => [0, 0, 0])
+        })
+      }),
+      (err) => err.code === 4 && /invalid vector/.test(err.message)
+    );
+
     // Corrupt embeddings.json fails closed on verifyCorpus, and recovers cleanly on normal syncCorpus without embedTransport
     await writeFile(isolated.embeddingsCachePath, "{corrupt-json", "utf8");
     await assert.rejects(isolated.verifyCorpus(), /embeddings cache is not valid JSON/);
