@@ -3,6 +3,25 @@
 This public repository owns a read-only DinkusKit and EmDash guide and its
 evaluation runner. Treat every committed byte as public.
 
+## Product context
+
+Read the public [DinkusKit vision](https://github.com/dinkuskit/.github/blob/36aab690a7ef66dc119aab70e258ea979c54841a/VISION.md)
+and [scope and planning](https://github.com/dinkuskit/.github/blob/36aab690a7ef66dc119aab70e258ea979c54841a/ROADMAP.md)
+alongside this repository's narrower contract. Guide is an optional supplied
+assistant, not a required business operator. First-party and merchant-selected
+assistants receive authority only through the same supported interfaces and
+explicit permissions; these broader principles do not add action tools here.
+
+The org direction includes permissioned business-wide and site-specific
+knowledge, with authorized site overrides. It does not authorize Guide to
+ingest private conversations, tenant knowledge, or private research. Public
+source admission remains an explicit reviewed corpus change.
+
+For a material product, architecture, or verification question, consult the
+canonical [selective research guidance](https://github.com/saariuslystoned/SaariusSkills/blob/23f2bb1208b3baa7aedaa87faec00395f9bdd061/skills/emdash-commerce/SKILL.md).
+Use research for the question at hand; routine fixes do not need a new cycle.
+Research findings and accepted designs do not automatically become active work.
+
 ## Product boundary
 
 - Guide reads only the public source snapshots admitted by the corpus manifest.

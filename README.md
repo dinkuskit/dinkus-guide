@@ -2,10 +2,11 @@
 
 Read-only, source-backed DinkusKit and EmDash guide with an independent
 evaluation runner. It reads only the immutable public MIT Markdown and MDX pins
-in `corpus/manifest.json` across the seven approved repositories
+in `corpus/manifest.json` across the seven approved product/API repositories
 (`dinkuskit/dinkuskit`, `dinkuskit/commerce`, `dinkuskit/payments`,
 `dinkuskit/inventory`, `dinkuskit/ship`, `dinkuskit/template-store`, and
-`emdash-cms/emdash`); raw snapshots and optional dense chunk embeddings are
+`emdash-cms/emdash`), plus the explicitly licensed `VISION.md` and `ROADMAP.md`
+context documents from `dinkuskit/.github`. Raw snapshots and optional dense chunk embeddings are
 stored only in the ignored `.cache/dinkus-guide/` directory.
 
 ## Quickstart
@@ -37,14 +38,14 @@ bounded and action-free; see [docs/cli.md](docs/cli.md). The
 
 - **Public development suite (`eval/cases.json`, `dinkus-guide-dev-v4`)**: 75
   realistic multi-fact developer and operator questions across all 7 approved
-  public repositories and 6 diagnostic categories (`lookup`, `workflow`,
+  product/API repositories and 6 diagnostic categories (`lookup`, `workflow`,
   `transition_trap`, `cross_plugin`, `honest_abstention`, `boundary_refusal`).
   `npm test` and `npm run verify` validate `eval/cases.json` without requiring
   access to any holdout file and refuse any holdout suite placed inside `eval/`.
 - **External locked promotion exam (`dinkus-guide-holdout-v4`, 25–30 unseen
   cases)**: Stored outside the public repository in owner-only storage
   unavailable to optimization workers (including via network access), stratified
-  across the same 6 categories and 7 repositories, and evaluated via `--suite`
+  across the same 6 categories and 7 product/API repositories, and evaluated via `--suite`
   with `--check-disjoint eval/cases.json --summary-only` so public baseline
   proofs record cryptographic `suiteSha256` and aggregate failure buckets
   without leaking unseen questions, case IDs, or gold expectations. **Strict

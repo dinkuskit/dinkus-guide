@@ -4,14 +4,14 @@ Evaluation separates public iterative development from isolated promotion
 testing across two disjoint v4 suites:
 
 - **Public development suite (`eval/cases.json`, `dinkus-guide-dev-v4`, `role: "development"`)**:
-  75 multi-fact developer and operator cases across all 7 approved public
+  75 multi-fact developer and operator cases across all 7 approved product/API
   repositories. Ordinary verification (`npm test` and `npm run verify`) checks
   `eval/cases.json` without requiring holdout access and fails closed if any
   holdout or extra suite JSON is placed under `eval/`.
 - **External locked promotion exam (`dinkus-guide-holdout-v4`, `role: "locked_promotion_exam"`)**:
   25–30 unseen cases stored outside the public repository in owner-controlled
   storage unavailable to optimization workers (including through network
-  access), stratified across the exact same 6 categories and 7 repositories.
+  access), stratified across the exact same 6 categories and 7 product/API repositories.
   **Strict promotion-exam lock**: Rung 3 prompt/harness optimizers and Rung 4
   LoRA training data generators are strictly forbidden from mounting, reading,
   indexing, or tuning against the external holdout suite. At evaluation time,
