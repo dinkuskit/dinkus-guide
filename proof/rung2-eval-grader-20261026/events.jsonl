@@ -7,3 +7,6 @@
 {"ts":"2026-10-26T23:08:09Z","event":"epoch2_review_outcomes","reviewedSha":"4b58193606e9aafb30ee86c54c793907703a4235","ciVerify":"pass","openclawP3":"0_findings_0.84","clawsweeperDispatch":"base_moved_during_admission_pr10_9efdaebf"}
 {"ts":"2026-10-26T23:10:14Z","event":"base_synchronized","base":"9efdaebf02980a5d2f3b493f595a2033e7873217","sha":"bd1b89877f1163c9e7dbd2733f79d14ef3484416","sources":164,"tests":"55/55"}
 {"ts":"2026-10-26T23:25:22Z","event":"epoch3_live_baselines_completed","evaluatedSha":"bd1b89877f1163c9e7dbd2733f79d14ef3484416","devModel":"45/75","holdoutSummaryModel":"16/28","loopbackForwardsClosed":true}
+{"ts":"2026-10-26T23:35:26Z","event":"epoch3_review_adjudicated","reviewedSha":"fdb37d57618c689231d10c6526406a595d7cc792","openclawP3":"1_P2_abstention_body","clawsweeper":"1_P2_summary_only_error_redaction","jevsweeper":"repair"}
+{"ts":"2026-10-26T23:41:34Z","event":"epoch3_repair_committed","sha":"618d6e27c74ffbaf33734974b4f8ab19f5e501c8","tests":"56/56"}
+{"ts":"2026-10-26T23:55:44Z","event":"epoch4_live_baselines_completed","evaluatedSha":"618d6e27c74ffbaf33734974b4f8ab19f5e501c8","devModel":"41/75","holdoutSummaryModel":"17/28","loopbackForwardsClosed":true}

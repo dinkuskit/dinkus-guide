@@ -1,5 +1,5 @@
 {
-  "evaluatedSourceHead": "bd1b89877f1163c9e7dbd2733f79d14ef3484416",
+  "evaluatedSourceHead": "618d6e27c74ffbaf33734974b4f8ab19f5e501c8",
   "baseSha": "9efdaebf02980a5d2f3b493f595a2033e7873217",
   "corpusHash": "2bc34f2be1c0d91d2e5ee2a1acf5ba466e67ae11bdfe379214107b45d32835b2",
   "sources": 164,
@@ -212,16 +212,16 @@
       "mode": "retrieval",
       "retrieval": "hybrid-rrf-qwen3-embedding",
       "modelIdentity": null,
-      "passed": 34,
+      "passed": 33,
       "total": 56,
-      "score": 0.6071428571428571,
+      "score": 0.5892857142857143,
       "sourceHits": 56,
       "eligible": 56,
       "sourceRecallAtK": 1,
-      "spanHits": 34,
-      "recallAtK": 0.6071428571428571,
+      "spanHits": 33,
+      "recallAtK": 0.5892857142857143,
       "failureBuckets": {
-        "retrieval_miss": 22,
+        "retrieval_miss": 23,
         "schema_error": 0,
         "abstention_error": 0,
         "citation_miss": 0,
@@ -231,11 +231,11 @@
       "byCategory": {
         "lookup": {
           "total": 18,
-          "passed": 9,
-          "failed": 9,
-          "score": 0.5,
+          "passed": 8,
+          "failed": 10,
+          "score": 0.4444444444444444,
           "failureBuckets": {
-            "retrieval_miss": 9,
+            "retrieval_miss": 10,
             "schema_error": 0,
             "abstention_error": 0,
             "citation_miss": 0,
@@ -293,34 +293,34 @@
       "mode": "extractive",
       "retrieval": "hybrid-rrf-qwen3-embedding",
       "modelIdentity": null,
-      "passed": 48,
+      "passed": 47,
       "total": 75,
-      "score": 0.64,
+      "score": 0.6266666666666667,
       "sourceHits": 56,
       "eligible": 56,
       "sourceRecallAtK": 1,
-      "spanHits": 34,
-      "recallAtK": 0.6071428571428571,
+      "spanHits": 33,
+      "recallAtK": 0.5892857142857143,
       "failureBuckets": {
         "retrieval_miss": 0,
         "schema_error": 0,
         "abstention_error": 5,
         "citation_miss": 0,
-        "fact_miss": 22
+        "fact_miss": 23
       },
       "forbiddenClaims": 0,
       "byCategory": {
         "lookup": {
           "total": 18,
-          "passed": 9,
-          "failed": 9,
-          "score": 0.5,
+          "passed": 8,
+          "failed": 10,
+          "score": 0.4444444444444444,
           "failureBuckets": {
             "retrieval_miss": 0,
             "schema_error": 0,
             "abstention_error": 0,
             "citation_miss": 0,
-            "fact_miss": 9
+            "fact_miss": 10
           }
         },
         "workflow": {
@@ -402,34 +402,34 @@
       "modelIdentity": [
         "nemotron-3.5-super-vl"
       ],
-      "passed": 45,
+      "passed": 41,
       "total": 75,
-      "score": 0.6,
+      "score": 0.5466666666666666,
       "sourceHits": 56,
       "eligible": 56,
       "sourceRecallAtK": 1,
-      "spanHits": 34,
-      "recallAtK": 0.6071428571428571,
+      "spanHits": 33,
+      "recallAtK": 0.5892857142857143,
       "failureBuckets": {
         "retrieval_miss": 0,
-        "schema_error": 6,
-        "abstention_error": 1,
+        "schema_error": 5,
+        "abstention_error": 5,
         "citation_miss": 2,
-        "fact_miss": 21
+        "fact_miss": 22
       },
       "forbiddenClaims": 2,
       "byCategory": {
         "lookup": {
           "total": 18,
-          "passed": 9,
-          "failed": 9,
-          "score": 0.5,
+          "passed": 8,
+          "failed": 10,
+          "score": 0.4444444444444444,
           "failureBuckets": {
             "retrieval_miss": 0,
-            "schema_error": 2,
-            "abstention_error": 0,
+            "schema_error": 1,
+            "abstention_error": 1,
             "citation_miss": 0,
-            "fact_miss": 7
+            "fact_miss": 8
           }
         },
         "workflow": {
@@ -439,8 +439,8 @@
           "score": 0.3333333333333333,
           "failureBuckets": {
             "retrieval_miss": 0,
-            "schema_error": 3,
-            "abstention_error": 1,
+            "schema_error": 2,
+            "abstention_error": 2,
             "citation_miss": 0,
             "fact_miss": 6
           }
@@ -473,13 +473,13 @@
         },
         "honest_abstention": {
           "total": 10,
-          "passed": 9,
-          "failed": 1,
-          "score": 0.9,
+          "passed": 6,
+          "failed": 4,
+          "score": 0.6,
           "failureBuckets": {
             "retrieval_miss": 0,
-            "schema_error": 1,
-            "abstention_error": 0,
+            "schema_error": 2,
+            "abstention_error": 2,
             "citation_miss": 0,
             "fact_miss": 0
           }
@@ -922,9 +922,9 @@
       "modelIdentity": [
         "nemotron-3.5-super-vl"
       ],
-      "passed": 16,
+      "passed": 17,
       "total": 28,
-      "score": 0.5714285714285714,
+      "score": 0.6071428571428571,
       "sourceHits": 21,
       "eligible": 22,
       "sourceRecallAtK": 0.9545454545454546,
@@ -932,7 +932,7 @@
       "recallAtK": 0.6363636363636364,
       "failureBuckets": {
         "retrieval_miss": 1,
-        "schema_error": 4,
+        "schema_error": 3,
         "abstention_error": 0,
         "citation_miss": 1,
         "fact_miss": 6
@@ -941,12 +941,12 @@
       "byCategory": {
         "lookup": {
           "total": 7,
-          "passed": 4,
-          "failed": 3,
-          "score": 0.5714285714285714,
+          "passed": 5,
+          "failed": 2,
+          "score": 0.7142857142857143,
           "failureBuckets": {
             "retrieval_miss": 0,
-            "schema_error": 2,
+            "schema_error": 1,
             "abstention_error": 0,
             "citation_miss": 0,
             "fact_miss": 1
