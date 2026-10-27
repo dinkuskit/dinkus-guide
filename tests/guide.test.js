@@ -1269,7 +1269,7 @@ test("multi-section windowing and complementary Pass-2 selection surface seconda
   }
 });
 
-test("guide self-mutation and ungrounded proper-entity queries abstain cleanly while courtesy and ordinary capitalization remain answerable", async () => {
+test("guide self-mutation and low-coverage integration queries abstain cleanly while courtesy, named addressees, and ordinary capitalization remain answerable", async () => {
   const docs = [
     corpus.documents[0],
     {
@@ -1302,16 +1302,18 @@ test("guide self-mutation and ungrounded proper-entity queries abstain cleanly w
   }
   const tenDocCorpus = { corpusHash: "ten-doc-corpus", documents: docs };
 
-  for (const supportedCourtesyQuery of [
+  for (const supportedQuery of [
     "Explain public template store colors. Thanks!",
     "Explain public template store colors. thanks!",
     "Hello! Please explain public template store colors, Thanks!",
+    "Could Alice explain public template store colors?",
+    "How can Moonbeam use public template store colors?",
     "Explain Public Template Store Palette",
     "Explain public template store colors. Specifically, how does setup work?"
   ]) {
-    const supported = await answerQuestion(supportedCourtesyQuery, tenDocCorpus);
-    assert.equal(supported.status, "answered", supportedCourtesyQuery);
-    assert.equal(supported.citations[0].sourceId, "safe", supportedCourtesyQuery);
+    const supported = await answerQuestion(supportedQuery, tenDocCorpus);
+    assert.equal(supported.status, "answered", supportedQuery);
+    assert.equal(supported.citations[0].sourceId, "safe", supportedQuery);
   }
 
   const selfMutation = await answerQuestion(
@@ -1329,11 +1331,10 @@ test("guide self-mutation and ungrounded proper-entity queries abstain cleanly w
   assert.equal(visionRole.citations[0].sourceId, "org-vision");
 
   for (const unsupportedIntegrationQuery of [
-    "How do I configure NetSuite inventory SKU stock webhook sync?",
-    "NetSuite inventory SKU stock webhook sync?",
-    "How do I configure Klarna and Afterpay inventory SKU stock webhook sync?"
+    "How do I configure automated NetSuite ERP purchase-order synchronization?",
+    "Which API endpoint configures Klarna and Afterpay installment adapters?"
   ]) {
-    const ungroundedEntity = await answerQuestion(unsupportedIntegrationQuery, tenDocCorpus);
-    assert.equal(ungroundedEntity.status, "insufficient_evidence", unsupportedIntegrationQuery);
+    const ungrounded = await answerQuestion(unsupportedIntegrationQuery, tenDocCorpus);
+    assert.equal(ungrounded.status, "insufficient_evidence", unsupportedIntegrationQuery);
   }
 });

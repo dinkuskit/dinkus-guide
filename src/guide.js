@@ -17,18 +17,6 @@ const COURTESY_TERMS = new Set([
   "thanks", "thank", "thx", "hello", "hey", "hi", "cheers",
   "regards", "sincerely", "kindly", "pls", "appreciate", "appreciated"
 ]);
-const NON_ENTITY_WORDS = new Set([
-  "dear", "best", "advance", "also", "however", "therefore", "specifically",
-  "currently", "actually", "basically", "ideally", "maybe", "perhaps",
-  "otherwise", "meanwhile", "instead", "example", "examples", "note", "notes",
-  "question", "questions", "help", "summary", "details", "asap", "fyi", "faq",
-  "todo", "now", "today", "tomorrow", "yesterday", "monday", "tuesday",
-  "wednesday", "thursday", "friday", "saturday", "sunday", "january",
-  "february", "march", "april", "june", "july", "august", "september",
-  "october", "november", "december", "not", "only", "all", "any", "must",
-  "never", "always", "very", "more", "most", "new", "old", "yes", "important",
-  "required", "optional", "default", "team", "folks", "everyone", "anyone"
-]);
 const genericQueryWords = new Set([
   "get", "started", "start", "install", "setup", "configure", "step", "steps",
   "run", "use", "used", "command", "commands", "does", "should", "would", "could",
@@ -389,43 +377,6 @@ function queryTokenInfo(question) {
     : rawTokens;
   const topicalTerms = coverageTerms.filter((word) => !genericQueryWords.has(word));
   return { searchTerms: rawTokens, coverageTerms, topicalTerms };
-}
-
-function extractProperEntityTerms(question) {
-  const withoutCodeAndSignoff = question
-    .replace(/`[^`]*`/g, " ")
-    .replace(/(?:,\s*|\s+—\s+|\s+-\s+)(?:many\s+thanks|thanks(?:\s+in\s+advance|\s+a\s+lot|\s+so\s+much)?|thank\s+you(?:\s+so\s+much)?|thx|cheers|best(?:\s+regards)?|kind\s+regards|regards|sincerely|much\s+appreciated|appreciated)(?:\s+[A-Z][a-z]+)?[\s!?.]*$/i, " ");
-  const entities = new Set();
-  for (const rawClause of withoutCodeAndSignoff.split(/[.?!;:\n()[\]—–]+/)) {
-    const clause = rawClause
-      .replace(/^[^A-Za-z0-9]+/, "")
-      .replace(/^(?:(?:please|pls|kindly|thanks|thank\s+you|thx|hello|hi|hey|dear|cheers|regards|sincerely|note|question)\b[\s,!.:;-]*)+/i, "")
-      .replace(/^[^A-Za-z0-9]+/, "")
-      .trim();
-    if (!clause) continue;
-
-    const alphaWords = clause.match(/\b[A-Za-z][A-Za-z0-9]{2,}\b/g) ?? [];
-    if (!alphaWords.length) continue;
-    const hasLowerWord = alphaWords.some((word) => /^[a-z]/.test(word));
-    const nonBrandTail = alphaWords.slice(1).filter((word) => !BRAND_TERMS.has(word.toLowerCase()));
-    const tailUpperCount = nonBrandTail.filter((word) => /^[A-Z]/.test(word)).length;
-    const isUniformCaseClause = !hasLowerWord ||
-      (nonBrandTail.length >= 3 && tailUpperCount / nonBrandTail.length >= 0.75);
-
-    for (const match of clause.matchAll(/\b[A-Z][A-Za-z0-9]{2,}\b/g)) {
-      const token = match[0];
-      const isCamelCase = /^[A-Z][a-z0-9]+[A-Z][A-Za-z0-9]*$/.test(token);
-      if (isUniformCaseClause && !isCamelCase) continue;
-      if (match.index === 0 && !isCamelCase) continue;
-      const lower = token.toLowerCase();
-      if (BRAND_TERMS.has(lower) || STOP.has(lower) || COURTESY_TERMS.has(lower) ||
-          genericQueryWords.has(lower) || NON_ENTITY_WORDS.has(lower)) {
-        continue;
-      }
-      entities.add(lower);
-    }
-  }
-  return [...entities];
 }
 
 function cosineSimilarity(vecA, vecB) {
@@ -828,8 +779,7 @@ export function rankEvidence(question, corpus, limit = 12, { queryVector, chunkV
     a.chunk.startLine - b.chunk.startLine
   );
 
-  const properEntityTerms = extractProperEntityTerms(question);
-  const allLookupTerms = [...new Set([...searchTerms, ...coverageTerms, ...properEntityTerms])];
+  const allLookupTerms = [...new Set([...searchTerms, ...coverageTerms])];
   const termRows = buildTermRowMap(termRowStmt, allLookupTerms);
 
   const selected = selectDiverseChunks(fused, limit, termRows, searchTerms, hybridActive, indexMeta);
@@ -856,13 +806,6 @@ export function rankEvidence(question, corpus, limit = 12, { queryVector, chunkV
     topicalTerms.length <= 4 &&
     maxCosine >= 0.85 &&
     (selected[0]?.cosine ?? 0) >= 0.85;
-
-  if (!semanticGrounded && corpus.documents.length >= 10) {
-    const hasUnknownProperEntity = properEntityTerms.some((word) => (termRows.get(word)?.size ?? 0) === 0);
-    if (hasUnknownProperEntity) {
-      return [];
-    }
-  }
 
   if (!semanticGrounded && (!coverageTerms.length || coverage < 0.6 || topicalCoverage < 0.6)) {
     return [];
