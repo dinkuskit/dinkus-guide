@@ -1,5 +1,5 @@
 {
-  "evaluatedSourceHead": "9484b54a38c23b4cdd4d456ce1d33d0fa14aad76",
+  "evaluatedSourceHead": "de0959c68cae04154b496f378b35841266564158",
   "baseSha": "9efdaebf02980a5d2f3b493f595a2033e7873217",
   "corpusHash": "2bc34f2be1c0d91d2e5ee2a1acf5ba466e67ae11bdfe379214107b45d32835b2",
   "sources": 164,
@@ -212,16 +212,16 @@
       "mode": "retrieval",
       "retrieval": "hybrid-rrf-qwen3-embedding",
       "modelIdentity": null,
-      "passed": 34,
+      "passed": 33,
       "total": 56,
-      "score": 0.6071428571428571,
+      "score": 0.5892857142857143,
       "sourceHits": 56,
       "eligible": 56,
       "sourceRecallAtK": 1,
-      "spanHits": 34,
-      "recallAtK": 0.6071428571428571,
+      "spanHits": 33,
+      "recallAtK": 0.5892857142857143,
       "failureBuckets": {
-        "retrieval_miss": 22,
+        "retrieval_miss": 23,
         "schema_error": 0,
         "abstention_error": 0,
         "citation_miss": 0,
@@ -270,11 +270,11 @@
         },
         "cross_plugin": {
           "total": 13,
-          "passed": 10,
-          "failed": 3,
-          "score": 0.7692307692307693,
+          "passed": 9,
+          "failed": 4,
+          "score": 0.6923076923076923,
           "failureBuckets": {
-            "retrieval_miss": 3,
+            "retrieval_miss": 4,
             "schema_error": 0,
             "abstention_error": 0,
             "citation_miss": 0,
@@ -293,20 +293,20 @@
       "mode": "extractive",
       "retrieval": "hybrid-rrf-qwen3-embedding",
       "modelIdentity": null,
-      "passed": 48,
+      "passed": 47,
       "total": 75,
-      "score": 0.64,
+      "score": 0.6266666666666667,
       "sourceHits": 56,
       "eligible": 56,
       "sourceRecallAtK": 1,
-      "spanHits": 34,
-      "recallAtK": 0.6071428571428571,
+      "spanHits": 33,
+      "recallAtK": 0.5892857142857143,
       "failureBuckets": {
         "retrieval_miss": 0,
         "schema_error": 0,
         "abstention_error": 5,
         "citation_miss": 0,
-        "fact_miss": 22
+        "fact_miss": 23
       },
       "forbiddenClaims": 0,
       "byCategory": {
@@ -351,15 +351,15 @@
         },
         "cross_plugin": {
           "total": 13,
-          "passed": 10,
-          "failed": 3,
-          "score": 0.7692307692307693,
+          "passed": 9,
+          "failed": 4,
+          "score": 0.6923076923076923,
           "failureBuckets": {
             "retrieval_miss": 0,
             "schema_error": 0,
             "abstention_error": 0,
             "citation_miss": 0,
-            "fact_miss": 3
+            "fact_miss": 4
           }
         },
         "honest_abstention": {
@@ -402,20 +402,20 @@
       "modelIdentity": [
         "nemotron-3.5-super-vl"
       ],
-      "passed": 42,
+      "passed": 39,
       "total": 75,
-      "score": 0.56,
+      "score": 0.52,
       "sourceHits": 56,
       "eligible": 56,
       "sourceRecallAtK": 1,
-      "spanHits": 34,
-      "recallAtK": 0.6071428571428571,
+      "spanHits": 33,
+      "recallAtK": 0.5892857142857143,
       "failureBuckets": {
         "retrieval_miss": 0,
-        "schema_error": 8,
-        "abstention_error": 4,
-        "citation_miss": 1,
-        "fact_miss": 20
+        "schema_error": 4,
+        "abstention_error": 6,
+        "citation_miss": 3,
+        "fact_miss": 23
       },
       "forbiddenClaims": 2,
       "byCategory": {
@@ -426,10 +426,10 @@
           "score": 0.5,
           "failureBuckets": {
             "retrieval_miss": 0,
-            "schema_error": 3,
+            "schema_error": 2,
             "abstention_error": 0,
             "citation_miss": 0,
-            "fact_miss": 6
+            "fact_miss": 7
           }
         },
         "workflow": {
@@ -439,10 +439,10 @@
           "score": 0.4,
           "failureBuckets": {
             "retrieval_miss": 0,
-            "schema_error": 3,
-            "abstention_error": 0,
+            "schema_error": 1,
+            "abstention_error": 1,
             "citation_miss": 0,
-            "fact_miss": 6
+            "fact_miss": 7
           }
         },
         "transition_trap": {
@@ -460,15 +460,15 @@
         },
         "cross_plugin": {
           "total": 13,
-          "passed": 7,
-          "failed": 6,
-          "score": 0.5384615384615384,
+          "passed": 4,
+          "failed": 9,
+          "score": 0.3076923076923077,
           "failureBuckets": {
             "retrieval_miss": 0,
             "schema_error": 1,
             "abstention_error": 0,
-            "citation_miss": 1,
-            "fact_miss": 4
+            "citation_miss": 3,
+            "fact_miss": 5
           }
         },
         "honest_abstention": {
@@ -478,8 +478,8 @@
           "score": 0.5,
           "failureBuckets": {
             "retrieval_miss": 0,
-            "schema_error": 1,
-            "abstention_error": 4,
+            "schema_error": 0,
+            "abstention_error": 5,
             "citation_miss": 0,
             "fact_miss": 0
           }
@@ -946,8 +946,8 @@
           "score": 0.7142857142857143,
           "failureBuckets": {
             "retrieval_miss": 0,
-            "schema_error": 1,
-            "abstention_error": 0,
+            "schema_error": 0,
+            "abstention_error": 1,
             "citation_miss": 0,
             "fact_miss": 1
           }
@@ -998,8 +998,8 @@
           "score": 0.6666666666666666,
           "failureBuckets": {
             "retrieval_miss": 0,
-            "schema_error": 0,
-            "abstention_error": 1,
+            "schema_error": 1,
+            "abstention_error": 0,
             "citation_miss": 0,
             "fact_miss": 0
           }

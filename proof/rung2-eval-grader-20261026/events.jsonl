@@ -16,3 +16,6 @@
 {"ts":"2026-10-27T00:46:30Z","event":"epoch5_review_adjudicated","reviewedSha":"357e8c5cf9e6aa3c359d29670d5acb6c613d9b91","openclawP3":"1_P2_locked_exam_summary_only_guard","clawsweeper":"2_P2_coordinated_and_unicode_refusal","jevsweeper":"repair"}
 {"ts":"2026-10-27T00:54:12Z","event":"epoch5_repair_committed","sha":"9484b54a38c23b4cdd4d456ce1d33d0fa14aad76","tests":"56/56"}
 {"ts":"2026-10-27T01:05:40Z","event":"epoch6_live_baselines_completed","evaluatedSha":"9484b54a38c23b4cdd4d456ce1d33d0fa14aad76","devModel":"42/75","holdoutSummaryModel":"17/28","loopbackForwardsClosed":true}
+{"ts":"2026-10-27T01:17:27Z","event":"epoch6_review_adjudicated","reviewedSha":"dcb3b476e78b526b8718a1a48271a6eaaf009048","clawsweeper":"ready_4of6_proof_5of6_0_findings","openclawP3":"1_P2_subject_anchored_abstention_clause"}
+{"ts":"2026-10-27T01:29:05Z","event":"epoch6_repair_committed","sha":"de0959c68cae04154b496f378b35841266564158","tests":"56/56"}
+{"ts":"2026-10-27T01:44:00Z","event":"epoch7_live_baselines_completed","evaluatedSha":"de0959c68cae04154b496f378b35841266564158","devModel":"39/75","holdoutSummaryModel":"17/28","loopbackForwardsClosed":true}
