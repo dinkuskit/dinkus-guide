@@ -1099,7 +1099,7 @@ test("buildGuideResponseFormat and transport enforce constrained JSON decoding w
         model: "nemotron-3.5-super-vl",
         choices: [{ message: { content: JSON.stringify({
           status: "insufficient_evidence",
-          answer: "The pinned public corpus does not contain enough evidence to answer this question.",
+          answer: "Run undocumented flag --bad instead.",
           citationIds: ["E1"]
         }) } }]
       }));
@@ -1116,6 +1116,54 @@ test("buildGuideResponseFormat and transport enforce constrained JSON decoding w
     answer: "The pinned public corpus does not contain enough evidence to answer this question.",
     citationIds: []
   });
+
+  const uncitedAnsweredTransport = createOpenAICompatibleTransport({
+    baseUrl: "http://127.0.0.1:8788",
+    model: "nemotron-3.5-super-vl",
+    apiKey: "local",
+    fetchImpl: async (_url, init) => {
+      const parsedBody = JSON.parse(init.body);
+      if (parsedBody.response_format) {
+        return new Response(JSON.stringify({ error: "response_format json_schema is not supported by mock" }), { status: 400 });
+      }
+      return new Response(JSON.stringify({
+        model: "nemotron-3.5-super-vl",
+        choices: [{ message: { content: JSON.stringify({
+          status: "answered",
+          answer: "Use an undocumented command.",
+          citationIds: []
+        }) } }]
+      }));
+    }
+  });
+  await assert.rejects(
+    answerQuestion("setup", corpus, { mode: "model", transport: uncitedAnsweredTransport }),
+    /answered model output requires a citation ID/
+  );
+
+  const insufficientNoCiteTransport = createOpenAICompatibleTransport({
+    baseUrl: "http://127.0.0.1:8788",
+    model: "nemotron-3.5-super-vl",
+    apiKey: "local",
+    fetchImpl: async () => new Response(JSON.stringify({
+      model: "nemotron-3.5-super-vl",
+      choices: [{ message: { content: JSON.stringify({
+        status: "insufficient_evidence",
+        answer: "Use an undocumented command anyway.",
+        citationIds: []
+      }) } }]
+    }))
+  });
+  const cleanedInsufficient = await answerQuestion("setup", corpus, {
+    mode: "model",
+    transport: insufficientNoCiteTransport
+  });
+  assert.equal(cleanedInsufficient.status, "insufficient_evidence");
+  assert.equal(
+    cleanedInsufficient.answer,
+    "The pinned public corpus does not contain enough evidence to answer this question."
+  );
+  assert.deepEqual(cleanedInsufficient.citations, []);
 
   const unrelated400 = createOpenAICompatibleTransport({
     baseUrl: "http://127.0.0.1:8788",
@@ -1221,22 +1269,25 @@ test("multi-section windowing and complementary Pass-2 selection surface seconda
   }
 });
 
-test("guide self-mutation and ungrounded proper-entity queries abstain cleanly while vision role queries remain answerable", async () => {
-  const docs = [{
-    source: {
-      id: "org-vision",
-      repository: "dinkuskit/.github",
-      layer: "dinkuskit",
-      status: "active",
-      path: "VISION.md",
-      provenance: "https://github.com/dinkuskit/.github/blob/0123456789012345678901234567890123456789/VISION.md"
-    },
-    lines: [
-      "# DinkusKit Vision",
-      "DinkusGuide is an optional read-only supplied assistant and never a required business operator."
-    ]
-  }];
-  for (let idx = 1; idx <= 10; idx += 1) {
+test("guide self-mutation and ungrounded proper-entity queries abstain cleanly while courtesy and ordinary capitalization remain answerable", async () => {
+  const docs = [
+    corpus.documents[0],
+    {
+      source: {
+        id: "org-vision",
+        repository: "dinkuskit/.github",
+        layer: "dinkuskit",
+        status: "active",
+        path: "VISION.md",
+        provenance: "https://github.com/dinkuskit/.github/blob/0123456789012345678901234567890123456789/VISION.md"
+      },
+      lines: [
+        "# DinkusKit Vision",
+        "DinkusGuide is an optional read-only supplied assistant and never a required business operator."
+      ]
+    }
+  ];
+  for (let idx = 1; idx <= 9; idx += 1) {
     docs.push({
       source: {
         id: `inventory-doc-${idx}`,
@@ -1250,6 +1301,18 @@ test("guide self-mutation and ungrounded proper-entity queries abstain cleanly w
     });
   }
   const tenDocCorpus = { corpusHash: "ten-doc-corpus", documents: docs };
+
+  for (const supportedCourtesyQuery of [
+    "Explain public template store colors. Thanks!",
+    "Explain public template store colors. thanks!",
+    "Hello! Please explain public template store colors, Thanks!",
+    "Explain Public Template Store Palette",
+    "Explain public template store colors. Specifically, how does setup work?"
+  ]) {
+    const supported = await answerQuestion(supportedCourtesyQuery, tenDocCorpus);
+    assert.equal(supported.status, "answered", supportedCourtesyQuery);
+    assert.equal(supported.citations[0].sourceId, "safe", supportedCourtesyQuery);
+  }
 
   const selfMutation = await answerQuestion(
     "How do I configure DinkusGuide write permissions and private tenant storage?",
@@ -1265,9 +1328,12 @@ test("guide self-mutation and ungrounded proper-entity queries abstain cleanly w
   assert.equal(visionRole.status, "answered");
   assert.equal(visionRole.citations[0].sourceId, "org-vision");
 
-  const ungroundedEntity = await answerQuestion(
+  for (const unsupportedIntegrationQuery of [
     "How do I configure NetSuite inventory SKU stock webhook sync?",
-    tenDocCorpus
-  );
-  assert.equal(ungroundedEntity.status, "insufficient_evidence");
+    "NetSuite inventory SKU stock webhook sync?",
+    "How do I configure Klarna and Afterpay inventory SKU stock webhook sync?"
+  ]) {
+    const ungroundedEntity = await answerQuestion(unsupportedIntegrationQuery, tenDocCorpus);
+    assert.equal(ungroundedEntity.status, "insufficient_evidence", unsupportedIntegrationQuery);
+  }
 });

@@ -9,9 +9,26 @@ const MAX_COALESCE_WINDOW_CHARS = 4200;
 const RRF_K = 60;
 const SHORT_TECH_TOKENS = new Set(["d1", "r2", "s3", "kv", "pb", "ui", "ci", "ai", "db", "id", "js", "ts"]);
 const BRAND_TERMS = new Set(["dinkuskit", "emdash"]);
+const CANONICAL_INSUFFICIENT_ANSWER = "The pinned public corpus does not contain enough evidence to answer this question.";
 const STOP = new Set(
   "a an and are as at be by can do documented example explain for from give how i if in is it me my no of on or please relate relates set setting so tell that the their them they this to treat up us we what when where which who why with you".split(" ")
 );
+const COURTESY_TERMS = new Set([
+  "thanks", "thank", "thx", "hello", "hey", "hi", "cheers",
+  "regards", "sincerely", "kindly", "pls", "appreciate", "appreciated"
+]);
+const NON_ENTITY_WORDS = new Set([
+  "dear", "best", "advance", "also", "however", "therefore", "specifically",
+  "currently", "actually", "basically", "ideally", "maybe", "perhaps",
+  "otherwise", "meanwhile", "instead", "example", "examples", "note", "notes",
+  "question", "questions", "help", "summary", "details", "asap", "fyi", "faq",
+  "todo", "now", "today", "tomorrow", "yesterday", "monday", "tuesday",
+  "wednesday", "thursday", "friday", "saturday", "sunday", "january",
+  "february", "march", "april", "june", "july", "august", "september",
+  "october", "november", "december", "not", "only", "all", "any", "must",
+  "never", "always", "very", "more", "most", "new", "old", "yes", "important",
+  "required", "optional", "default", "team", "folks", "everyone", "anyone"
+]);
 const genericQueryWords = new Set([
   "get", "started", "start", "install", "setup", "configure", "step", "steps",
   "run", "use", "used", "command", "commands", "does", "should", "would", "could",
@@ -364,7 +381,7 @@ function queryTokenInfo(question) {
     .replace(/(?<![a-z0-9])v(?=\d)/gi, "");
   const rawTokens = [...new Set(
     normalized.toLowerCase().replace(/[^a-z0-9]+/g, " ").split(" ")
-      .filter((word) => (word.length > 2 || SHORT_TECH_TOKENS.has(word)) && !STOP.has(word))
+      .filter((word) => (word.length > 2 || SHORT_TECH_TOKENS.has(word)) && !STOP.has(word) && !COURTESY_TERMS.has(word))
   )];
   const nonBrandTopical = rawTokens.filter((word) => !BRAND_TERMS.has(word) && !genericQueryWords.has(word));
   const coverageTerms = nonBrandTopical.length > 0
@@ -372,6 +389,43 @@ function queryTokenInfo(question) {
     : rawTokens;
   const topicalTerms = coverageTerms.filter((word) => !genericQueryWords.has(word));
   return { searchTerms: rawTokens, coverageTerms, topicalTerms };
+}
+
+function extractProperEntityTerms(question) {
+  const withoutCodeAndSignoff = question
+    .replace(/`[^`]*`/g, " ")
+    .replace(/(?:,\s*|\s+—\s+|\s+-\s+)(?:many\s+thanks|thanks(?:\s+in\s+advance|\s+a\s+lot|\s+so\s+much)?|thank\s+you(?:\s+so\s+much)?|thx|cheers|best(?:\s+regards)?|kind\s+regards|regards|sincerely|much\s+appreciated|appreciated)(?:\s+[A-Z][a-z]+)?[\s!?.]*$/i, " ");
+  const entities = new Set();
+  for (const rawClause of withoutCodeAndSignoff.split(/[.?!;:\n()[\]—–]+/)) {
+    const clause = rawClause
+      .replace(/^[^A-Za-z0-9]+/, "")
+      .replace(/^(?:(?:please|pls|kindly|thanks|thank\s+you|thx|hello|hi|hey|dear|cheers|regards|sincerely|note|question)\b[\s,!.:;-]*)+/i, "")
+      .replace(/^[^A-Za-z0-9]+/, "")
+      .trim();
+    if (!clause) continue;
+
+    const alphaWords = clause.match(/\b[A-Za-z][A-Za-z0-9]{2,}\b/g) ?? [];
+    if (!alphaWords.length) continue;
+    const hasLowerWord = alphaWords.some((word) => /^[a-z]/.test(word));
+    const nonBrandTail = alphaWords.slice(1).filter((word) => !BRAND_TERMS.has(word.toLowerCase()));
+    const tailUpperCount = nonBrandTail.filter((word) => /^[A-Z]/.test(word)).length;
+    const isUniformCaseClause = !hasLowerWord ||
+      (nonBrandTail.length >= 3 && tailUpperCount / nonBrandTail.length >= 0.75);
+
+    for (const match of clause.matchAll(/\b[A-Z][A-Za-z0-9]{2,}\b/g)) {
+      const token = match[0];
+      const isCamelCase = /^[A-Z][a-z0-9]+[A-Z][A-Za-z0-9]*$/.test(token);
+      if (isUniformCaseClause && !isCamelCase) continue;
+      if (match.index === 0 && !isCamelCase) continue;
+      const lower = token.toLowerCase();
+      if (BRAND_TERMS.has(lower) || STOP.has(lower) || COURTESY_TERMS.has(lower) ||
+          genericQueryWords.has(lower) || NON_ENTITY_WORDS.has(lower)) {
+        continue;
+      }
+      entities.add(lower);
+    }
+  }
+  return [...entities];
 }
 
 function cosineSimilarity(vecA, vecB) {
@@ -774,12 +828,7 @@ export function rankEvidence(question, corpus, limit = 12, { queryVector, chunkV
     a.chunk.startLine - b.chunk.startLine
   );
 
-  const strippedLeadingWord = question.trim().replace(/^\S+\s+/, "");
-  const properEntityTerms = [...new Set(
-    (strippedLeadingWord.match(/\b[A-Z][A-Za-z0-9]{2,}\b/g) ?? [])
-      .map((word) => word.toLowerCase())
-      .filter((word) => !BRAND_TERMS.has(word) && !STOP.has(word) && !genericQueryWords.has(word))
-  )];
+  const properEntityTerms = extractProperEntityTerms(question);
   const allLookupTerms = [...new Set([...searchTerms, ...coverageTerms, ...properEntityTerms])];
   const termRows = buildTermRowMap(termRowStmt, allLookupTerms);
 
@@ -810,10 +859,7 @@ export function rankEvidence(question, corpus, limit = 12, { queryVector, chunkV
 
   if (!semanticGrounded && corpus.documents.length >= 10) {
     const hasUnknownProperEntity = properEntityTerms.some((word) => (termRows.get(word)?.size ?? 0) === 0);
-    const unknownTopicalCount = topicalTerms.filter(
-      (word) => word.length >= 4 && !/^\d+$/.test(word) && (termRows.get(word)?.size ?? 0) === 0
-    ).length;
-    if (hasUnknownProperEntity || unknownTopicalCount >= 2) {
+    if (hasUnknownProperEntity) {
       return [];
     }
   }
@@ -1178,12 +1224,13 @@ export function createOpenAICompatibleTransport({ fetchImpl = fetch, baseUrl, mo
             Object.keys(decoded).length === 3 &&
             typeof decoded.answer === "string" && decoded.answer.trim() &&
             Array.isArray(decoded.citationIds) &&
-            decoded.citationIds.every((id) => typeof id === "string" && allowedIds.has(id))) {
-          if (decoded.status === "insufficient_evidence" && decoded.citationIds.length > 0) {
-            text = JSON.stringify({ status: "insufficient_evidence", answer: decoded.answer, citationIds: [] });
-          } else if (decoded.status === "answered" && decoded.citationIds.length === 0) {
-            text = JSON.stringify({ status: "insufficient_evidence", answer: decoded.answer, citationIds: [] });
-          }
+            decoded.citationIds.every((id) => typeof id === "string" && allowedIds.has(id)) &&
+            decoded.status === "insufficient_evidence") {
+          text = JSON.stringify({
+            status: "insufficient_evidence",
+            answer: CANONICAL_INSUFFICIENT_ANSWER,
+            citationIds: []
+          });
         }
       } catch {}
     }
