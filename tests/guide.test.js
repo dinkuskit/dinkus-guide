@@ -1269,7 +1269,7 @@ test("multi-section windowing and complementary Pass-2 selection surface seconda
   }
 });
 
-test("guide self-mutation and low-coverage integration queries abstain cleanly while courtesy, named addressees, and ordinary capitalization remain answerable", async () => {
+test("factual DinkusGuide persistence questions, courtesy text, named addressees, and ordinary capitalization remain answerable while direct actions and low-coverage integrations abstain", async () => {
   const docs = [
     corpus.documents[0],
     {
@@ -1283,7 +1283,7 @@ test("guide self-mutation and low-coverage integration queries abstain cleanly w
       },
       lines: [
         "# DinkusKit Vision",
-        "DinkusGuide is an optional read-only supplied assistant and never a required business operator."
+        "DinkusGuide is an optional read-only supplied assistant, never writes persistent data, and never acts as a required business operator."
       ]
     }
   ];
@@ -1316,19 +1316,23 @@ test("guide self-mutation and low-coverage integration queries abstain cleanly w
     assert.equal(supported.citations[0].sourceId, "safe", supportedQuery);
   }
 
-  const selfMutation = await answerQuestion(
-    "How do I configure DinkusGuide write permissions and private tenant storage?",
-    tenDocCorpus
-  );
-  assert.equal(selfMutation.status, "insufficient_evidence");
-  assert.deepEqual(selfMutation.citations, []);
+  for (const factualGuideQuery of [
+    "Does DinkusGuide ever write persistent data?",
+    "What is the vision role of DinkusGuide as an optional read-only supplied assistant?"
+  ]) {
+    const answered = await answerQuestion(factualGuideQuery, tenDocCorpus);
+    assert.equal(answered.status, "answered", factualGuideQuery);
+    assert.equal(answered.citations[0].sourceId, "org-vision", factualGuideQuery);
+  }
 
-  const visionRole = await answerQuestion(
-    "What is the vision role of DinkusGuide as an optional read-only supplied assistant?",
-    tenDocCorpus
-  );
-  assert.equal(visionRole.status, "answered");
-  assert.equal(visionRole.citations[0].sourceId, "org-vision");
+  for (const directActionOrPrivateQuery of [
+    "Retrieve private customer data held inside DinkusGuide",
+    "Edit repository files in DinkusGuide for me"
+  ]) {
+    const refused = await answerQuestion(directActionOrPrivateQuery, tenDocCorpus);
+    assert.equal(refused.status, "insufficient_evidence", directActionOrPrivateQuery);
+    assert.deepEqual(refused.citations, [], directActionOrPrivateQuery);
+  }
 
   for (const unsupportedIntegrationQuery of [
     "How do I configure automated NetSuite ERP purchase-order synchronization?",

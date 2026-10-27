@@ -880,11 +880,6 @@ function refusalOrUnsupported(question, corpus) {
       ? "DinkusGuide is text-only in v1 and cannot inspect screenshots or prove a UI state. Provide a documented text contract or consult the pinned sources."
       : "DinkusGuide is read-only and cannot access private data or perform changes.");
   }
-  if (/\b(?:dinkus-guide|dinkusguide)\b/i.test(question) &&
-      /\b(?:mutat\w*|writ\w*|delet\w*|deploy\w*|private|tenant)\b/i.test(question) &&
-      !/\b(?:vision|role|whether|is\s+(?:dinkus-guide|dinkusguide))\b/i.test(question)) {
-    return insufficient("DinkusGuide is read-only and cannot access private data or perform changes.");
-  }
   if (unsupportedVersion(question, corpus)) {
     return insufficient("The pinned public corpus does not contain the requested version information.");
   }
