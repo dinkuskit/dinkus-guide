@@ -1,5 +1,5 @@
 {
-  "evaluatedSourceHead": "11b6573f71d9ea7271b2235096997f0bd1460e0f",
+  "evaluatedSourceHead": "e00c34f51d1ab522869b34b2a74db4c1ed67453d",
   "baseSha": "9efdaebf02980a5d2f3b493f595a2033e7873217",
   "corpusHash": "2bc34f2be1c0d91d2e5ee2a1acf5ba466e67ae11bdfe379214107b45d32835b2",
   "sources": 164,
@@ -212,16 +212,16 @@
       "mode": "retrieval",
       "retrieval": "hybrid-rrf-qwen3-embedding",
       "modelIdentity": null,
-      "passed": 33,
+      "passed": 34,
       "total": 56,
-      "score": 0.5892857142857143,
+      "score": 0.6071428571428571,
       "sourceHits": 56,
       "eligible": 56,
       "sourceRecallAtK": 1,
-      "spanHits": 33,
-      "recallAtK": 0.5892857142857143,
+      "spanHits": 34,
+      "recallAtK": 0.6071428571428571,
       "failureBuckets": {
-        "retrieval_miss": 23,
+        "retrieval_miss": 22,
         "schema_error": 0,
         "abstention_error": 0,
         "citation_miss": 0,
@@ -270,11 +270,11 @@
         },
         "cross_plugin": {
           "total": 13,
-          "passed": 9,
-          "failed": 4,
-          "score": 0.6923076923076923,
+          "passed": 10,
+          "failed": 3,
+          "score": 0.7692307692307693,
           "failureBuckets": {
-            "retrieval_miss": 4,
+            "retrieval_miss": 3,
             "schema_error": 0,
             "abstention_error": 0,
             "citation_miss": 0,
@@ -293,20 +293,20 @@
       "mode": "extractive",
       "retrieval": "hybrid-rrf-qwen3-embedding",
       "modelIdentity": null,
-      "passed": 47,
+      "passed": 48,
       "total": 75,
-      "score": 0.6266666666666667,
+      "score": 0.64,
       "sourceHits": 56,
       "eligible": 56,
       "sourceRecallAtK": 1,
-      "spanHits": 33,
-      "recallAtK": 0.5892857142857143,
+      "spanHits": 34,
+      "recallAtK": 0.6071428571428571,
       "failureBuckets": {
         "retrieval_miss": 0,
         "schema_error": 0,
         "abstention_error": 5,
         "citation_miss": 0,
-        "fact_miss": 23
+        "fact_miss": 22
       },
       "forbiddenClaims": 0,
       "byCategory": {
@@ -351,15 +351,15 @@
         },
         "cross_plugin": {
           "total": 13,
-          "passed": 9,
-          "failed": 4,
-          "score": 0.6923076923076923,
+          "passed": 10,
+          "failed": 3,
+          "score": 0.7692307692307693,
           "failureBuckets": {
             "retrieval_miss": 0,
             "schema_error": 0,
             "abstention_error": 0,
             "citation_miss": 0,
-            "fact_miss": 4
+            "fact_miss": 3
           }
         },
         "honest_abstention": {
@@ -408,14 +408,14 @@
       "sourceHits": 56,
       "eligible": 56,
       "sourceRecallAtK": 1,
-      "spanHits": 33,
-      "recallAtK": 0.5892857142857143,
+      "spanHits": 34,
+      "recallAtK": 0.6071428571428571,
       "failureBuckets": {
         "retrieval_miss": 0,
         "schema_error": 9,
-        "abstention_error": 4,
+        "abstention_error": 5,
         "citation_miss": 2,
-        "fact_miss": 20
+        "fact_miss": 19
       },
       "forbiddenClaims": 2,
       "byCategory": {
@@ -426,23 +426,23 @@
           "score": 0.5,
           "failureBuckets": {
             "retrieval_miss": 0,
-            "schema_error": 2,
+            "schema_error": 3,
             "abstention_error": 0,
             "citation_miss": 0,
-            "fact_miss": 7
+            "fact_miss": 6
           }
         },
         "workflow": {
           "total": 15,
-          "passed": 6,
-          "failed": 9,
-          "score": 0.4,
+          "passed": 5,
+          "failed": 10,
+          "score": 0.3333333333333333,
           "failureBuckets": {
             "retrieval_miss": 0,
             "schema_error": 4,
             "abstention_error": 1,
             "citation_miss": 0,
-            "fact_miss": 4
+            "fact_miss": 5
           }
         },
         "transition_trap": {
@@ -460,15 +460,15 @@
         },
         "cross_plugin": {
           "total": 13,
-          "passed": 5,
-          "failed": 8,
-          "score": 0.38461538461538464,
+          "passed": 6,
+          "failed": 7,
+          "score": 0.46153846153846156,
           "failureBuckets": {
             "retrieval_miss": 0,
             "schema_error": 0,
             "abstention_error": 0,
             "citation_miss": 2,
-            "fact_miss": 6
+            "fact_miss": 5
           }
         },
         "honest_abstention": {
@@ -478,8 +478,8 @@
           "score": 0.5,
           "failureBuckets": {
             "retrieval_miss": 0,
-            "schema_error": 2,
-            "abstention_error": 3,
+            "schema_error": 1,
+            "abstention_error": 4,
             "citation_miss": 0,
             "fact_miss": 0
           }

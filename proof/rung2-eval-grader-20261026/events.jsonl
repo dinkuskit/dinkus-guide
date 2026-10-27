@@ -22,3 +22,6 @@
 {"ts":"2026-10-27T01:55:00Z","event":"epoch7_review_adjudicated","reviewedSha":"9314bccb1827aa5bf0052c3fe50fef81372e576d","openclawP3":"0_findings_0.78","clawsweeper":"2_P2_complete_clause_and_token_alignment","jevsweeper":"repair"}
 {"ts":"2026-10-27T02:08:14Z","event":"epoch7_repair_committed","sha":"11b6573f71d9ea7271b2235096997f0bd1460e0f","tests":"56/56"}
 {"ts":"2026-10-27T02:22:28Z","event":"epoch8_live_baselines_completed","evaluatedSha":"11b6573f71d9ea7271b2235096997f0bd1460e0f","devModel":"40/75","holdoutSummaryModel":"17/28","loopbackForwardsClosed":true}
+{"ts":"2026-10-27T02:32:28Z","event":"epoch8_review_adjudicated","reviewedSha":"27e1a3abecbf725764c8fe92b8387d3db465e9e3","openclawP3":"0_findings_0.78","clawsweeper":"1_P2_affirmative_scope_complements","jevsweeper":"repair"}
+{"ts":"2026-10-27T02:38:38Z","event":"epoch8_repair_committed","sha":"e00c34f51d1ab522869b34b2a74db4c1ed67453d","tests":"56/56"}
+{"ts":"2026-10-27T02:52:42Z","event":"epoch9_live_baselines_completed","evaluatedSha":"e00c34f51d1ab522869b34b2a74db4c1ed67453d","devModel":"40/75","holdoutSummaryModel":"17/28","loopbackForwardsClosed":true}
