@@ -10,6 +10,10 @@ function parseArgs() {
   const values = { json: false, mode: "extractive", modeSet: false, limit: 12, limitSet: false, positional: [] };
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
+    if (arg === "--") {
+      values.positional.push(...args.slice(index + 1));
+      break;
+    }
     if (arg.startsWith("-") && !allowed.has(arg)) throw Object.assign(new Error(`unknown option: ${arg}`), { code: 2 });
     if (arg === "--json") { if (values.json) throw Object.assign(new Error("duplicate --json"), { code: 2 }); values.json = true; continue; }
     if (arg === "--help" || arg === "--version") { values[arg.slice(2)] = true; continue; }
