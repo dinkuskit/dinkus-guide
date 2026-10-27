@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { createHash } from "node:crypto";
 import { realpathSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
@@ -11,6 +12,33 @@ const root = path.resolve(path.dirname(selfPath), "..");
 const cli = path.join(root, "bin", "dinkus-guide");
 const providerUnavailableError = /^(?:model mode requires configured provider|DINKUS_GUIDE_BASE_URL, MODEL, and API_KEY are required|the model alias is retired; use nemotron-3\.5-super-vl|model base URL must be credential-free HTTPS \(or loopback HTTP\)|invalid model base URL|model provider request failed|model provider unavailable \(HTTP \d+\)|DINKUS_GUIDE_EMBED_BASE_URL and EMBED_MODEL are required|DINKUS_GUIDE_EMBED_API_KEY is required for non-loopback HTTPS embedding endpoints|embedding base URL must be credential-free HTTPS \(or loopback HTTP\)|invalid embedding base URL|embedding provider request failed|embedding provider unavailable \(HTTP \d+\)|corpus embeddings cache is (?:missing|out of date for current chunking); run corpus sync with embedding configuration)$/;
 
+export const ALLOWED_CATEGORIES = new Set([
+  "lookup",
+  "workflow",
+  "transition_trap",
+  "cross_plugin",
+  "honest_abstention",
+  "boundary_refusal"
+]);
+
+export const APPROVED_EVAL_REPOSITORIES = [
+  "dinkuskit/dinkuskit",
+  "dinkuskit/commerce",
+  "dinkuskit/payments",
+  "dinkuskit/inventory",
+  "dinkuskit/ship",
+  "dinkuskit/template-store",
+  "emdash-cms/emdash"
+];
+
+export const FAILURE_BUCKETS = [
+  "retrieval_miss",
+  "schema_error",
+  "abstention_error",
+  "citation_miss",
+  "fact_miss"
+];
+
 function isMainModule() {
   if (!process.argv[1]) return false;
   try {
@@ -20,28 +48,345 @@ function isMainModule() {
   }
 }
 
-function parseArgs() {
-  const values = { json: false, mode: "extractive", modeSet: false, k: 12, kSet: false, command: null };
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index];
+function normalizeText(value) {
+  return String(value ?? "").toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function sha256Text(value) {
+  return createHash("sha256").update(value, "utf8").digest("hex");
+}
+
+function emptyBucketCounts() {
+  return {
+    retrieval_miss: 0,
+    schema_error: 0,
+    abstention_error: 0,
+    citation_miss: 0,
+    fact_miss: 0
+  };
+}
+
+function parseArgs(rawArgs = args) {
+  const values = {
+    json: false,
+    summaryOnly: false,
+    mode: "extractive",
+    modeSet: false,
+    k: 12,
+    kSet: false,
+    suite: null,
+    suiteSet: false,
+    checkDisjoint: [],
+    command: null
+  };
+  for (let index = 0; index < rawArgs.length; index += 1) {
+    const arg = rawArgs[index];
     if (arg === "--json") { if (values.json) throw new Error("duplicate --json"); values.json = true; continue; }
+    if (arg === "--summary-only") { if (values.summaryOnly) throw new Error("duplicate --summary-only"); values.summaryOnly = true; continue; }
     if (arg === "--mode") {
-      if (values.modeSet || index + 1 >= args.length || args[index + 1].startsWith("-")) throw new Error("missing or duplicate --mode");
-      values.modeSet = true; values.mode = args[++index]; continue;
+      if (values.modeSet || index + 1 >= rawArgs.length || rawArgs[index + 1].startsWith("-")) throw new Error("missing or duplicate --mode");
+      values.modeSet = true; values.mode = rawArgs[++index]; continue;
     }
     if (arg === "--k") {
-      if (values.kSet || index + 1 >= args.length || args[index + 1].startsWith("-")) throw new Error("missing or duplicate --k");
+      if (values.kSet || index + 1 >= rawArgs.length || rawArgs[index + 1].startsWith("-")) throw new Error("missing or duplicate --k");
       values.kSet = true;
-      const parsedK = Number(args[++index]);
+      const parsedK = Number(rawArgs[++index]);
       if (!Number.isInteger(parsedK) || parsedK < 1 || parsedK > 50) throw new Error("k must be an integer between 1 and 50");
       values.k = parsedK;
       continue;
     }
-    if (arg.startsWith("-")) throw new Error(`unknown option: ${arg}`);
-    if (values.command) throw new Error(`unexpected argument: ${arg}`);
+    if (arg === "--suite") {
+      if (values.suiteSet || index + 1 >= rawArgs.length || rawArgs[index + 1].startsWith("-")) throw new Error("missing or duplicate --suite");
+      values.suiteSet = true;
+      values.suite = rawArgs[++index];
+      continue;
+    }
+    if (arg === "--check-disjoint") {
+      if (index + 1 >= rawArgs.length || rawArgs[index + 1].startsWith("-")) throw new Error("missing --check-disjoint path");
+      values.checkDisjoint.push(rawArgs[++index]);
+      continue;
+    }
+    if (arg.startsWith("-")) {
+      throw new Error(values.summaryOnly || rawArgs.includes("--summary-only") ? "unknown CLI option" : `unknown option: ${arg}`);
+    }
+    if (values.command) {
+      throw new Error(values.summaryOnly || rawArgs.includes("--summary-only") ? "unexpected positional argument" : `unexpected argument: ${arg}`);
+    }
     values.command = arg;
   }
   return values;
+}
+
+const canonicalRoot = (() => {
+  try { return realpathSync(root); } catch { return root; }
+})();
+
+function resolveWithExistingParentRealpath(inputPath) {
+  const abs = path.resolve(inputPath);
+  const trailing = [];
+  let current = abs;
+  for (;;) {
+    try {
+      const realCurrent = realpathSync(current);
+      return trailing.length ? path.join(realCurrent, ...trailing.reverse()) : realCurrent;
+    } catch {
+      const parent = path.dirname(current);
+      if (parent === current) return abs;
+      trailing.push(path.basename(current));
+      current = parent;
+    }
+  }
+}
+
+function relativeInsideBase(baseDir, targetPath) {
+  const rel = path.relative(baseDir, targetPath).replace(/\\/g, "/");
+  if (rel === "") return ".";
+  if (rel === ".." || rel.startsWith("../") || path.isAbsolute(rel)) return null;
+  return rel;
+}
+
+export function isInsideRoot(resolvedPath, baseRoot = canonicalRoot) {
+  const canonicalBase = baseRoot === canonicalRoot
+    ? canonicalRoot
+    : resolveWithExistingParentRealpath(baseRoot);
+  const abs = path.resolve(resolvedPath);
+  const realTarget = resolveWithExistingParentRealpath(abs);
+  const realRel = relativeInsideBase(canonicalBase, realTarget);
+  if (realRel !== null) return realRel;
+
+  const trailing = [];
+  let current = abs;
+  for (;;) {
+    const parent = path.dirname(current);
+    if (parent === current) break;
+    const leaf = path.basename(current);
+    const parentReal = resolveWithExistingParentRealpath(parent);
+    const candidate = path.join(parentReal, leaf, ...trailing);
+    const rel = relativeInsideBase(canonicalBase, candidate);
+    if (rel !== null) return rel;
+    trailing.unshift(leaf);
+    current = parent;
+  }
+  return null;
+}
+
+function sanitizeSuiteLabel(resolvedPath, { redactExternal = false } = {}) {
+  const rel = isInsideRoot(resolvedPath);
+  if (rel) return rel;
+  if (redactExternal) return "<external-suite>";
+  const target = resolveWithExistingParentRealpath(resolvedPath);
+  return path.basename(target);
+}
+
+export function verifySuiteStratification(label, suite, {
+  minCases,
+  maxCases,
+  expectedRole,
+  sourceRepositories = null,
+  requiredRepositories = APPROVED_EVAL_REPOSITORIES,
+  redactCaseDetails = false
+} = {}) {
+  const safeLabel = redactCaseDetails ? "<external-suite>" : label;
+  if (expectedRole && suite.role !== expectedRole) {
+    throw new Error(`${safeLabel} must declare role="${expectedRole}"`);
+  }
+  if (minCases !== undefined && maxCases !== undefined) {
+    if (suite.cases.length < minCases || suite.cases.length > maxCases) {
+      throw new Error(`${safeLabel} must contain ${minCases}-${maxCases} cases (got ${suite.cases.length})`);
+    }
+  }
+  if (suite.role === "locked_promotion_exam") {
+    if (typeof suite.policy !== "string" || !/Rung 3/i.test(suite.policy) || !/Rung 4/i.test(suite.policy)) {
+      throw new Error(`${safeLabel} must declare its Rung 3 / Rung 4 locked promotion exam policy`);
+    }
+  }
+  const categories = new Set(suite.cases.map((item) => item.category));
+  for (const cat of ALLOWED_CATEGORIES) {
+    if (!categories.has(cat)) {
+      throw new Error(`${safeLabel} is missing required category: ${cat}`);
+    }
+  }
+  if (sourceRepositories) {
+    const coveredRepos = new Set();
+    for (const item of suite.cases) {
+      for (const src of [...(item.sources ?? []), ...(item.anyOfSources ?? []).flat()]) {
+        const entry = sourceRepositories.get(src);
+        const repo = typeof entry === "string" ? entry : entry?.repository;
+        if (repo) coveredRepos.add(repo);
+      }
+    }
+    for (const repo of requiredRepositories) {
+      if (!coveredRepos.has(repo)) {
+        throw new Error(`${safeLabel} is missing repository coverage for ${repo}`);
+      }
+    }
+  }
+  return true;
+}
+
+export function assertSuitesDisjoint(primarySuite, referenceSuite, {
+  primaryLabel = primarySuite?.suite ?? "primary",
+  referenceLabel = referenceSuite?.suite ?? "reference",
+  redactCaseDetails = false
+} = {}) {
+  if (!primarySuite?.cases || !referenceSuite?.cases) {
+    throw new Error("both suites must provide cases arrays for disjointness verification");
+  }
+  const refIds = new Set(referenceSuite.cases.map((item) => item.id));
+  const refQuestions = new Set(referenceSuite.cases.map((item) => normalizeText(item.question)));
+  for (const item of primarySuite.cases) {
+    if (refIds.has(item.id)) {
+      throw new Error(
+        redactCaseDetails
+          ? "duplicate case id detected across compared suites"
+          : `duplicate case id across ${primaryLabel} and ${referenceLabel}: ${item.id}`
+      );
+    }
+    if (refQuestions.has(normalizeText(item.question))) {
+      throw new Error(
+        redactCaseDetails
+          ? "duplicate question detected across compared suites"
+          : `duplicate question across ${primaryLabel} and ${referenceLabel}: ${item.id}`
+      );
+    }
+  }
+  return true;
+}
+
+export function validateSuite(suite, {
+  manifestIds = null,
+  sourceRepositories = null,
+  requireCategories = false,
+  redactCaseDetails = false
+} = {}) {
+  if (!suite || typeof suite !== "object" || Array.isArray(suite)) {
+    throw new Error("evaluation suite must be a JSON object");
+  }
+  if (!Number.isInteger(suite.version) || suite.version < 1) {
+    throw new Error("evaluation suite requires integer version >= 1");
+  }
+  if (typeof suite.suite !== "string" || !suite.suite.trim()) {
+    throw new Error("evaluation suite requires a non-empty suite identifier");
+  }
+  if (!Array.isArray(suite.cases) || !suite.cases.length) {
+    throw new Error("evaluation suite requires a non-empty cases array");
+  }
+  const enforceV4 = requireCategories || suite.version >= 4 || suite.role === "locked_promotion_exam";
+  const seenIds = new Set();
+  const seenQuestions = new Set();
+
+  for (const item of suite.cases) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      throw new Error("each evaluation case must be an object");
+    }
+    if (typeof item.id !== "string" || !item.id.trim()) {
+      throw new Error("evaluation case requires a non-empty id");
+    }
+    if (seenIds.has(item.id)) {
+      throw new Error(redactCaseDetails ? "duplicate evaluation case id" : `duplicate evaluation case id: ${item.id}`);
+    }
+    seenIds.add(item.id);
+    const casePrefix = redactCaseDetails ? "suite case" : `case ${item.id}`;
+
+    if (typeof item.question !== "string" || !item.question.trim()) {
+      throw new Error(`${casePrefix}: question must be non-empty`);
+    }
+    const normalizedQuestion = normalizeText(item.question);
+    if (seenQuestions.has(normalizedQuestion)) {
+      throw new Error(`${casePrefix}: duplicate question text`);
+    }
+    seenQuestions.add(normalizedQuestion);
+
+    if (typeof item.abstain !== "boolean") {
+      throw new Error(`${casePrefix}: abstain must be boolean`);
+    }
+    if (item.expectedStatus !== undefined) {
+      const expectedForAbstain = item.abstain ? "insufficient_evidence" : "answered";
+      if (item.expectedStatus !== expectedForAbstain) {
+        throw new Error(`${casePrefix}: expectedStatus must match abstain (${expectedForAbstain})`);
+      }
+    }
+    if (enforceV4 || item.category !== undefined) {
+      if (!ALLOWED_CATEGORIES.has(item.category)) {
+        throw new Error(`${casePrefix}: invalid or missing category`);
+      }
+      const isAbstentionCategory = item.category === "honest_abstention" || item.category === "boundary_refusal";
+      if (item.abstain !== isAbstentionCategory) {
+        throw new Error(
+          redactCaseDetails
+            ? `${casePrefix}: category disagrees with abstain=${item.abstain}`
+            : `${casePrefix}: category ${item.category} disagrees with abstain=${item.abstain}`
+        );
+      }
+    }
+
+    if (!Array.isArray(item.facts) || item.facts.some((fact) => typeof fact !== "string" || !fact.trim())) {
+      throw new Error(`${casePrefix}: facts must be an array of non-empty strings`);
+    }
+    if (!item.abstain && enforceV4 && item.facts.length < 2) {
+      throw new Error(`${casePrefix}: answerable v4 cases require at least 2 specific facts`);
+    }
+
+    if (item.forbiddenFacts !== undefined) {
+      if (!Array.isArray(item.forbiddenFacts) || item.forbiddenFacts.some((fact) => typeof fact !== "string" || !fact.trim())) {
+        throw new Error(`${casePrefix}: forbiddenFacts must be an array of non-empty strings`);
+      }
+    }
+
+    const sources = item.sources ?? [];
+    if (!Array.isArray(sources) || sources.some((src) => typeof src !== "string" || !src.trim())) {
+      throw new Error(`${casePrefix}: sources must be an array of source IDs`);
+    }
+    const anyOfSources = item.anyOfSources ?? [];
+    if (!Array.isArray(anyOfSources) || anyOfSources.some((group) =>
+      !Array.isArray(group) || !group.length || group.some((src) => typeof src !== "string" || !src.trim())
+    )) {
+      throw new Error(`${casePrefix}: anyOfSources must be an array of non-empty source ID arrays`);
+    }
+
+    if (item.abstain && (sources.length > 0 || anyOfSources.length > 0)) {
+      throw new Error(`${casePrefix}: abstention cases cannot require sources or anyOfSources`);
+    }
+    if (!item.abstain && sources.length + anyOfSources.length === 0) {
+      throw new Error(`${casePrefix}: answerable cases require sources or anyOfSources`);
+    }
+
+    if (manifestIds) {
+      for (const src of [...sources, ...anyOfSources.flat()]) {
+        if (!manifestIds.has(src)) {
+          throw new Error(redactCaseDetails ? `${casePrefix}: unknown corpus sourceId` : `${casePrefix}: unknown corpus sourceId ${src}`);
+        }
+      }
+    }
+  }
+
+  if (suite.role === "locked_promotion_exam") {
+    verifySuiteStratification(suite.suite, suite, {
+      minCases: 25,
+      maxCases: 30,
+      expectedRole: "locked_promotion_exam",
+      sourceRepositories,
+      redactCaseDetails
+    });
+  }
+  return suite;
+}
+
+export async function loadCorpusSources(rootDir = root) {
+  const manifest = JSON.parse(await readFile(path.join(rootDir, "corpus", "manifest.json"), "utf8"));
+  const map = new Map();
+  for (const source of manifest.sources ?? []) {
+    const file = path.join(rootDir, ".cache", "dinkus-guide", "sources", `${source.id}.md`);
+    const text = await readFile(file, "utf8");
+    map.set(source.id, {
+      id: source.id,
+      repository: source.repository ?? "",
+      layer: source.layer ?? (source.repository === "emdash-cms/emdash" ? "emdash" : "dinkuskit"),
+      status: source.status ?? "active",
+      lines: text.split(/\r?\n/)
+    });
+  }
+  return map;
 }
 
 function runCli(cliArgs) {
@@ -71,179 +416,1264 @@ export function evidenceForCitations(evidence, citations) {
     citation.endLine === item.endLine));
 }
 
+function matchSourcesAndGroups(test, candidateIds) {
+  const mandatorySources = test.sources ?? [];
+  const sourceGroups = test.anyOfSources ?? [];
+  const mandatoryMatched = mandatorySources.filter((source) => candidateIds.includes(source)).length;
+  const groupsMatched = sourceGroups.filter((group) => group.some((source) => candidateIds.includes(source))).length;
+  const matched = mandatoryMatched + groupsMatched;
+  const required = mandatorySources.length + sourceGroups.length;
+  return {
+    mandatoryMatched,
+    mandatoryRequired: mandatorySources.length,
+    groupsMatched,
+    groupsRequired: sourceGroups.length,
+    matched,
+    required,
+    satisfied: matched === required
+  };
+}
+
 export function computeRecallCase(test, evidence, k = 12) {
   const topEvidence = (evidence ?? []).slice(0, k);
   const retrievedIds = [...new Set(topEvidence.map((item) => item.sourceId))];
-  const sourcesMatched = test.sources.filter((source) => retrievedIds.includes(source)).length;
-  const searchable = topEvidence.map((item) => item.excerpt).join("\n").toLowerCase().replace(/\s+/g, " ");
-  const factsInEvidence = test.facts.filter((fact) => searchable.includes(fact.toLowerCase().replace(/\s+/g, " "))).length;
-  const sourceHit = sourcesMatched === test.sources.length;
-  const spanFactHit = factsInEvidence === test.facts.length;
+  const sourceMatch = matchSourcesAndGroups(test, retrievedIds);
+  const searchable = normalizeText(topEvidence.map((item) => item.excerpt).join("\n"));
+  const factsList = test.facts ?? [];
+  const factsInEvidence = factsList.filter((fact) => searchable.includes(normalizeText(fact))).length;
+  const sourceHit = sourceMatch.satisfied;
+  const spanFactHit = factsInEvidence === factsList.length;
+  const hit = sourceHit && spanFactHit;
   return {
     id: test.id,
+    ...(test.category ? { category: test.category } : {}),
     k,
-    sourcesMatched,
-    sourcesRequired: test.sources.length,
+    sourcesMatched: sourceMatch.matched,
+    sourcesRequired: sourceMatch.required,
+    groupsMatched: sourceMatch.groupsMatched,
+    groupsRequired: sourceMatch.groupsRequired,
     factsInEvidence,
-    factsRequired: test.facts.length,
+    factsRequired: factsList.length,
     sourceHit,
     spanFactHit,
-    hit: sourceHit && spanFactHit
+    hit,
+    failureBucket: hit ? null : "retrieval_miss"
   };
 }
 
-function scoreGuideRun(test, run) {
-  const value = run.value;
-  const citations = value.citations ?? [];
-  const citedIds = [...new Set(citations.map((citation) => citation.sourceId))];
-  const citedEvidence = evidenceForCitations(value.evidence, citations);
-  const answerText = (value.answer ?? "").replace(test.question, "");
-  const searchable = `${answerText}\n${citedEvidence.map((item) => item.excerpt).join("\n")}`.toLowerCase().replace(/\s+/g, " ");
-  const facts = test.facts.filter((fact) => searchable.includes(fact.toLowerCase().replace(/\s+/g, " ")));
-  const requiredSources = test.sources.filter((source) => citedIds.includes(source));
-  const citationPass = test.abstain ? citedIds.length === 0 : requiredSources.length === test.sources.length;
-  const abstentionPass = test.abstain ? value.status === "insufficient_evidence" : value.status === "answered";
-  const exitPass = run.code === 0;
+export function verifyCitationSpan(citation, corpusSources = null) {
+  if (!citation || typeof citation !== "object") {
+    return { valid: false, reason: "malformed_citation" };
+  }
+  if (typeof citation.sourceId !== "string" || !citation.sourceId.trim()) {
+    return { valid: false, reason: "missing_source_id" };
+  }
+  if (!Number.isInteger(citation.startLine) || citation.startLine < 1 ||
+      !Number.isInteger(citation.endLine) || citation.endLine < citation.startLine) {
+    return { valid: false, reason: "invalid_line_range" };
+  }
+  if (!corpusSources) {
+    return { valid: true, text: null };
+  }
+  const doc = corpusSources.get(citation.sourceId);
+  if (!doc) {
+    return { valid: false, reason: "unknown_source_id" };
+  }
+  if (citation.endLine > doc.lines.length) {
+    return { valid: false, reason: "line_out_of_bounds" };
+  }
+  return {
+    valid: true,
+    text: doc.lines.slice(citation.startLine - 1, citation.endLine).join("\n")
+  };
+}
+
+const CORPUS_NOUN_PATTERN = "(?:corpus|sources?|documents?|documentation|docs|evidence|excerpts?|passages?|files?|charters?|manifest|contracts?|context|materials?|references?)";
+const CORPUS_MOD_PATTERN = "(?:(?:pinned|provided|available|public|retrieved|current)\\s+)*";
+const LEADING_CORPUS_FRAME_PATTERN = `(?:(?:based\\s+on|according\\s+to|in|within|across)\\s+(?:the\\s+|these\\s+)?${CORPUS_MOD_PATTERN}${CORPUS_NOUN_PATTERN}\\s*,\\s*)?`;
+const GUIDE_SUBJECT_PATTERN = `(?:dinkusguide|dinkus-guide|(?:this|the)\\s+(?:(?:optional|read-only|text-only|public(?:-source)?|documentation)\\s+)*guide|i)`;
+const CORPUS_SUBJECT_PATTERN = `(?:(?:the\\s+|these\\s+)?${CORPUS_MOD_PATTERN}${CORPUS_NOUN_PATTERN})`;
+
+const ABSTENTION_BUILTIN_GUIDANCE_SENTENCE_RE = /^provide\s+a\s+documented\s+text\s+contract\s+or\s+consult\s+the\s+pinned\s+(?:public\s+)?sources[.!?]?$/i;
+
+const ABSTENTION_EXPLICIT_SUBJECT_TAIL_RE = new RegExp(
+  `^${LEADING_CORPUS_FRAME_PATTERN}(?:(?<guideSubject>${GUIDE_SUBJECT_PATTERN})|(?<corpusSubject>${CORPUS_SUBJECT_PATTERN}))(?:\\s+in\\s+v1)?\\s+(?<tail>.+)$`,
+  "i"
+);
+const ABSTENTION_ANAPHORIC_SUBJECT_TAIL_RE = new RegExp(
+  `^${LEADING_CORPUS_FRAME_PATTERN}(?:(?<guideSubject>${GUIDE_SUBJECT_PATTERN})|(?<corpusSubject>${CORPUS_SUBJECT_PATTERN})|(?<itSubject>it))(?:\\s+in\\s+v1)?\\s+(?<tail>.+)$`,
+  "i"
+);
+
+const ABSTENTION_THERE_ABSENCE_CLAUSE_RE = new RegExp(
+  `^${LEADING_CORPUS_FRAME_PATTERN}there\\s+(?:is|are)\\s+(?:no|not\\s+enough|insufficient)\\s+` +
+  `(?:(?:(?:documented|public|pinned|verified|available|explicit)\\s+)*(?:evidence|documentation|information|mentions?|sources?)|` +
+  `(?:documented|public|pinned)\\s+(?:support|details|instructions))` +
+  `(?:\\s+(?<prep>in|within|across|for|about|on|to)\\s+(?<tail>.+?))?[.!?]?$`,
+  "i"
+);
+
+const ABSTENTION_BARE_ABSENCE_CLAUSE_RE = new RegExp(
+  `^${LEADING_CORPUS_FRAME_PATTERN}(?:insufficient|no)\\s+` +
+  `(?:(?:(?:documented|public|pinned|verified|available|explicit)\\s+)*(?:evidence|documentation|information)|` +
+  `(?:documented|public|pinned)\\s+(?:support|details|instructions))` +
+  `(?:\\s+(?:is|are)\\s+(?:available|provided|present|found|included|documented)(?:\\s+(?<prepA>in|within|across|for|about|on|to)\\s+(?<tailA>.+?))?|` +
+  `\\s+exists?(?:\\s+(?<prepB>in|within|across|for|about|on|to)\\s+(?<tailB>.+?))?|` +
+  `\\s+(?<prepC>in|within|across|for|about|on|to)\\s+(?<tailC>.+?))?[.!?]?$`,
+  "i"
+);
+
+const ABSTENTION_PASSIVE_TOPIC_CLAUSE_RE = new RegExp(
+  `^${LEADING_CORPUS_FRAME_PATTERN}(?<topic>[A-Za-z0-9"\`][A-Za-z0-9/@_'"\` -]*(?:\\.[A-Za-z0-9_-]+[A-Za-z0-9/@_'"\` -]*)*?)\\s+(?:is|are)\\s+` +
+  `(?:not\\s+(?:yet\\s+|currently\\s+)?(?:documented|supported|present|provided|available|mentioned|covered|included|built|implemented|specified|found|decided)|` +
+  `unverified|unsupported|undocumented|unbuilt|undecided|(?:(?:a|an)\\s+)?(?:(?:unbuilt|future)\\s+)?target\\s+direction|(?:an\\s+)?open\\s+decision)` +
+  `(?:\\s+(?:in|by|within|across)\\s+(?:the\\s+)?${CORPUS_MOD_PATTERN}(?:${CORPUS_NOUN_PATTERN}|v1))?[.!?]?$`,
+  "i"
+);
+
+const ABSTENTION_SENSITIVE_TOPIC_HEAD_RE = /\b(?:customers?|buyers?|merchants?|tenants?|accounts?|orders?|databases?|records?|histories|history|stores?|production|data)\s*$/i;
+
+const ABSTENTION_CLAUSE_HARD_PIVOT_RE = /[;:—–]|\s--\s|\b(?:but|however|although|though|nevertheless|meanwhile|whereas|while|because|since|unless)\b|,\s*yet\b|,\s*instead\b|\binstead\s*,|,\s*except\b|\bexcept\s+that\b|,\s*with\b/i;
+
+const ABSTENTION_AUXILIARY_RE = /\b(?:is|are|was|were|am|be|been|has|have|had|does|do|did|can|cannot|can't|could|will|won't|would|should|may|might|must)\b/i;
+
+const ABSTENTION_FINITE_VERB_RE = /\b(?:is|are|was|were|am|be|been|has|have|had|does|do|did|can|cannot|can't|could|will|won't|would|should|may|might|must|allows?|performs?|executes?|refuses?|forbids?|supports|implements?|contains?|includes?|provides?|covers|describes?|mentions?|specifies|specify|defines?|addresses|applies|discusses|explains?|indicates?|shows?|confirms?|modifies|modify|mutates?|edits?|commits?|deletes?|deploys?|exports?|exposes?|lives?|works?|uses?|runs|resides?|owes?|paid|bought|ordered|(?:answers|documents|states)\s+(?:a|an|the|this|that|these|those|all|any|[A-Za-z]{3,}))\b/i;
+
+const ABSTENTION_COORDINATED_VERB_START_RE = /^(?:is|are|was|were|am|be|been|has|have|had|does|do|did|can|cannot|can't|could|will|won't|would|should|may|might|must|allows?|performs?|executes?|refuses?|forbids?|implements?|contains?|includes?|provides?|describes?|specifies|specify|defines?|applies|apply|discusses|explains?|indicates?|shows?|confirms?|modifies|modify|mutates?|edits?|commits?|deletes?|deploys?|exports?|exposes?|lives?|works?|uses?|resides?|owes?|paid|bought|ordered|(?:supports?|covers?|mentions?|addresses|runs?|documents?|states?|answers?)\s+(?:a|an|the|this|that|these|those|all|any|live|automated|manual|[A-Za-z]{3,}))\b/i;
+
+const ABSTENTION_BARE_INFINITIVE_START_RE = /^(?:access|address|allow|answer|change|commit|confirm|configure|consult|contain|cover|define|delete|deploy|describe|detail|discuss|document|edit|execute|explain|export|expose|find|forge|have|implement|include|indicate|inspect|mention|modify|mutate|perform|prove|provide|retrieve|run|show|specify|state|support|sync|use|verify|view|write)\b/i;
+
+const ABSTENTION_COMPLEMENT_NEGATION_RE = /\b(?:not|never|no|neither|none|nothing|without|lack|lacks|lacking|missing|unable|cannot|can't|won't)\b/i;
+const ABSTENTION_COMPLEMENT_FINITE_AUX_RE = /\b(?:is|are|was|were|am|been|being|has|had|does|do|did|can|cannot|can't|could|will|won't|would|should|may|might|must)\b/i;
+const ABSTENTION_COMPLEMENT_3SG_VERB_RE = /\b(?:allows|performs|executes|refuses|forbids|implements|contains|includes|provides|describes|specifies|defines|applies|discusses|explains|indicates|shows|confirms|modifies|mutates|edits|commits|deletes|deploys|exports|exposes|lives|works|uses|resides|owes)\b/i;
+const ABSTENTION_COMPLEMENT_SUBORDINATE_RE = /\b(?:whether|if)\b|\bthat\s+(?!question\b|version\b|feature\b|topic\b|capability\b|integration\b|configuration\b|workflow\b|command\b|endpoint\b|request\b|setting\b)/i;
+const ABSTENTION_PLURAL_SUBJECT_VERB_RE = /\b(?:plugins|connectors|adapters|packages|modules|services|systems|models|endpoints|commands|tools|integrations|features|sources|documents|files|contracts|charters|secrets|keys)\s+(?:allow|perform|execute|refuse|forbid|support|implement|contain|include|provide|cover|describe|mention|specify|define|address|apply|discuss|explain|indicate|show|confirm|modify|mutate|edit|commit|delete|deploy|export|expose|use|run|access|change|configure|sync|verify|prove|state|write)\b/i;
+const ABSTENTION_POSTPOSITIVE_PREDICATE_ITEM_RE = /\s+\b(?:available|enabled|present|supported|documented|included|permitted|allowed|authorized|configured|implemented|built|verified|found|shown|exposed|public|optional)\s*$/i;
+
+const ABSTENTION_ALLOWED_CHARS_RE = /^[A-Za-z0-9 .,!?;:'"`()/@_\r\n-]+$/;
+
+const ABSTENTION_DOUBLE_NEGATION_RE = /\b(?:cannot|can't|won't|(?:can|could|will|would|should|may|might|must|does|do|did|is|are|was|were|am|has|have|had)\s+not)\s+(?:not|never)\b|\b(?:not|never|no)\s+(?:unable|missing|lacking|lack|without|unsupported|undocumented|unbuilt|unavailable|unverified|forbidden|prohibited|restricted|blocked)\b|\b(?:(?:is|are|was|were|am)\s+not|(?:cannot|can't|won't|(?:can|could|will|would|should|may|might|must|does|do|did)\s+not)\s+(?:have\s+to\s+)?be)\s+(?:(?:a|an|the|currently|still|strictly|solely|merely|just|only|optional)\s+)*(?:read[\s-]+only|text[\s-]+only|optional|public(?:-source)?|scoped)\b|\b(?:does|do|did|will|won't|can|cannot|can't|could|would|should|may|might|must)\s+(?:not\s+)?(?:refuse|forbid)\b|\b(?:lacks?|without|no|(?:cannot|can't|won't|(?:can|could|will|would|should|may|might|must|does|do|did|has|have|had)\s+not)\s+have)\s+(?:any\s+|a\s+|an\s+|the\s+)?(?:boundaries|boundary|rules?|policies|policy|restrictions?|read[\s-]+only|text[\s-]+only)\b/i;
+
+const ABSTENTION_EMBEDDED_CLAIM_RE = /\b(?:that|whether|where|when|if)\s+(?!(?:dinkusguide|dinkus-guide|(?:this|the)\s+guide|it)\b)[A-Za-z0-9/@_' -]{1,80}?\s+\b(?:is|are|was|were|has|have|had|does|do|did|can|cannot|can't|will|won't|would|should|may|might|must|contains?|includes?|holds?|stores?|shows?|exports?|lives?|works?|owes?|paid|ordered)\b/i;
+
+const ABSTENTION_DISALLOWED_CONTENT_RE = /```|https?:\/\/|(?:^|\n)\s*(?:[-*]\s+|\d+[.)]\s+|step\s+\d+\b)|\$\s*\d+|\b[A-Z][A-Z0-9_]{2,}\s*=|\b(?:wrangler|pnpm|npm|npx|curl|git)\s+(?:deploy|secret|push|commit|install|add|exec|run)\b|\b(?:typically\s+you|workaround|try\s+running|here\s+(?:is|are)\s+(?:how|the|your|a\s+sample))\b|\b(?:i\s+(?:have\s+)?(?:deployed|edited|created|deleted|exported|updated|executed|inspected|retrieved)|order\s+#\d+|sk_(?:live|test)_[A-Za-z0-9_]*|whsec_[A-Za-z0-9_]*|ec_pat_[A-Za-z0-9_]*|dk_store_[A-Za-z0-9_]*|Bearer\s+[A-Za-z0-9._-]{6,})\b|\b\d+\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?\s+(?:St(?:reet)?|Ave(?:nue)?|Rd|Road|Blvd|Boulevard|Dr(?:ive)?|Ln|Lane|Way|Ct|Court|Pl(?:ace)?)\b|\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b|\b\d{3}-\d{2}-\d{4}\b/i;
+
+const TOPIC_FUNCTION_WORDS = new Set(["a", "an", "the", "this", "that", "these", "those", "and", "or", "of", "in", "for", "to", "with", "on", "by", "from"]);
+
+export const ALLOWED_ABSTENTION_TOKENS = new Set([
+  "a", "an", "the", "this", "that", "these", "those", "i", "it", "its", "there",
+  "which", "what", "whether", "how",
+  "is", "are", "was", "were", "be", "been", "being", "am", "has", "have", "had", "do", "does", "did",
+  "can", "cannot", "cant", "t", "s", "could", "will", "won", "would", "should", "may", "might", "must",
+  "not", "no", "none", "nor", "neither", "never", "nothing", "without", "lack", "lacks", "lacking", "missing", "absent", "unavailable", "unknown",
+  "in", "on", "at", "to", "for", "of", "from", "by", "with", "within", "into", "onto", "about", "across", "against",
+  "among", "around", "as", "before", "after", "between", "beyond", "during", "over", "through", "under", "until", "up", "out", "outside",
+  "based", "according",
+  "and", "or", "but", "so", "yet", "if", "unless", "while", "whereas", "although", "though", "because", "since",
+  "than", "then", "therefore", "thus", "instead", "except",
+  "only", "solely", "strictly", "exclusively", "merely", "just", "also", "either", "any", "all", "both", "each",
+  "other", "another", "such", "same", "specific", "specifically", "explicit", "explicitly", "direct", "directly",
+  "current", "currently", "present", "presently", "still", "already", "optional", "retired", "exist", "exists",
+  "dinkusguide", "dinkus", "guide", "dinkuskit", "emdash", "v1", "version", "versions",
+  "read", "text", "write", "mutable", "mutate", "mutation", "mutations", "modify", "modifying", "edit", "change", "changes",
+  "commit", "delete", "deploy", "export", "expose", "use",
+  "perform", "performing", "execute", "executing", "execution", "run", "running", "action", "actions", "operation", "operations", "tool", "tools",
+  "unable", "able", "refuse", "refuses", "refused", "refusal", "permitted", "allowed", "allow", "allows", "authorized", "configured",
+  "forbid", "forbids", "forbidden", "prohibited", "restricted", "blocked",
+  "insufficient", "enough", "sufficient", "adequate", "unverified", "verified", "unsupported", "supported", "support", "supports",
+  "undocumented", "documented", "document", "documents", "documentation", "docs", "doc",
+  "unbuilt", "built", "implemented", "implement", "implements", "implementation", "unimplemented",
+  "undecided", "decided", "decision", "decisions", "open", "planned", "plan", "target", "direction", "directions", "future", "roadmap", "scope", "scoped",
+  "evidence", "corpus", "pinned", "public", "source", "sources", "file", "files", "excerpt", "excerpts", "passage", "passages",
+  "context", "reference", "references", "charter", "charters", "readme", "manifest", "contract", "contracts", "guidance", "material", "materials",
+  "contain", "contains", "contained", "include", "includes", "included", "provide", "provides", "provided",
+  "cover", "covers", "covered", "describe", "describes", "described", "mention", "mentions", "mentioned",
+  "specify", "specifies", "specified", "state", "states", "stated", "define", "defines", "defined",
+  "address", "addresses", "addressed", "apply", "applies", "discuss", "discusses", "discussed", "detail", "details", "detailed",
+  "explain", "explains", "explained", "indicate", "indicates", "indicated", "show", "shows", "shown",
+  "confirm", "confirms", "verify", "prove", "consult", "inspect", "inspecting", "view", "viewing",
+  "access", "accessing", "retrieve", "retrieved", "available", "found", "find", "forge", "forged", "citation", "citations", "citationids", "sourceid", "override",
+  "secret", "secrets", "key", "keys",
+  "answer", "answers", "answering", "question", "questions", "request", "requests", "requested", "query", "queries", "asked", "topic", "topics", "information", "info", "data",
+  "private", "internal", "external", "third", "party",
+  "screenshot", "screenshots", "image", "images", "visual", "ui",
+  "feature", "features", "capability", "capabilities", "functionality", "integration", "integrations",
+  "connector", "connectors", "adapter", "adapters", "bridge", "sync", "synchronization", "cutover", "manual", "automated", "automatic",
+  "configuration", "configure", "configuring", "config", "setting", "settings", "setup", "step", "steps", "instruction", "instructions", "workflow", "workflows",
+  "api", "apis", "cli", "command", "commands", "endpoint", "endpoints", "plugin", "plugins", "package", "packages",
+  "module", "modules", "service", "services", "system", "systems", "model", "models", "rule", "rules", "policy", "policies", "boundary", "boundaries"
+]);
+
+function normalizeAbstentionPunctuation(text) {
+  return String(text ?? "")
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/[\u2010-\u2012]/g, "-")
+    .replace(/[\u2013\u2014]/g, " -- ");
+}
+
+function tokenizeWords(text) {
+  return normalizeAbstentionPunctuation(text).toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+}
+
+function validateAbstentionParentheses(text, topicGroundedTokens) {
+  let depth = 0;
+  let start = -1;
+  for (let index = 0; index < text.length; index += 1) {
+    const ch = text[index];
+    if (ch === "(") {
+      if (depth > 0) return false;
+      depth = 1;
+      start = index;
+    } else if (ch === ")") {
+      if (depth !== 1) return false;
+      const inner = text.slice(start + 1, index);
+      if (!/^[A-Za-z0-9/@._-]{1,24}$/.test(inner)) return false;
+      const innerWords = tokenizeWords(inner);
+      if (!innerWords.length) return false;
+      const isVersionTag = /^v\d+(?:\.\d+)*$/i.test(inner);
+      if (!isVersionTag && !innerWords.every((word) => topicGroundedTokens.has(word))) {
+        return false;
+      }
+      depth = 0;
+    }
+  }
+  return depth === 0;
+}
+
+function hasBalancedQuotes(text) {
+  const doubleCount = (text.match(/"/g) ?? []).length;
+  const backtickCount = (text.match(/`/g) ?? []).length;
+  return doubleCount % 2 === 0 && backtickCount % 2 === 0 && !/""|``/.test(text);
+}
+
+function isCleanAbstentionComplement(raw, { requireBareInfinitive = false, allowLeadingHave = false } = {}) {
+  const body = String(raw ?? "").replace(/[.!?]+$/, "").trim();
+  if (!body || body.length > 220) return false;
+  if (!hasBalancedQuotes(body)) return false;
+  if (!/^(?:[A-Za-z0-9/@_'"`, -]|\.[A-Za-z0-9_-]+|\([A-Za-z0-9/@._-]{1,24}\))+$/.test(body)) return false;
+  if (body.includes(",")) {
+    if (!/^(?:[^,]+,\s+)+(?:\b(?:and|or|nor)\b\s+)[^,]+$/i.test(body)) return false;
+    const listItems = body.split(/,\s*(?:(?:and|or|nor)\b\s*)?/i).map((item) => item.trim());
+    for (const item of listItems) {
+      const words = tokenizeWords(item);
+      if (!words.length || words.length > 6) return false;
+      if (ABSTENTION_POSTPOSITIVE_PREDICATE_ITEM_RE.test(item)) return false;
+    }
+  }
+  if (ABSTENTION_COMPLEMENT_NEGATION_RE.test(body)) return false;
+  if (ABSTENTION_COMPLEMENT_FINITE_AUX_RE.test(body)) return false;
+  if (ABSTENTION_COMPLEMENT_3SG_VERB_RE.test(body)) return false;
+  if (ABSTENTION_COMPLEMENT_SUBORDINATE_RE.test(body)) return false;
+  if (ABSTENTION_PLURAL_SUBJECT_VERB_RE.test(body)) return false;
+  const haveStripped = allowLeadingHave ? body.replace(/^have\b\s*/i, "") : body;
+  if (/\bhave\b/i.test(haveStripped)) return false;
+  if (requireBareInfinitive && !ABSTENTION_BARE_INFINITIVE_START_RE.test(body)) return false;
+  return true;
+}
+
+const SUPPORTED_PUBLIC_READONLY_SCOPE_TOKENS = new Set([
+  "a", "an", "the", "this", "these", "and", "or", "in", "for", "of", "to", "from", "across", "within", "about", "on", "by",
+  "public", "pinned", "provided", "available", "retrieved", "current", "verified", "documented", "explicit",
+  "read", "only", "text", "optional", "v1",
+  "dinkusguide", "dinkus", "guide", "dinkuskit", "emdash",
+  "corpus", "source", "sources", "document", "documents", "documentation", "docs", "doc",
+  "evidence", "excerpt", "excerpts", "passage", "passages", "file", "files",
+  "charter", "charters", "readme", "manifest", "contract", "contracts", "guidance", "material", "materials", "reference", "references",
+  "question", "questions", "query", "queries", "topic", "topics", "information", "info", "answer", "answers", "answering", "consult"
+]);
+
+const REQUIRED_BOUNDARY_ANCHOR_TOKENS = new Set([
+  "public", "pinned", "read", "text", "documentation", "docs", "doc", "document", "documents",
+  "source", "sources", "corpus", "evidence", "contract", "contracts", "charter", "charters",
+  "manifest", "passages", "excerpts", "files", "materials", "references"
+]);
+
+const DISALLOWED_AFFIRMATIVE_SCOPE_TOKENS = new Set([
+  "private", "internal", "external", "secret", "secrets", "key", "keys", "data",
+  "write", "mutable", "mutate", "mutation", "mutations", "modify", "modifying", "edit",
+  "change", "changes", "commit", "delete", "deploy", "export", "expose",
+  "perform", "performing", "execute", "executing", "execution", "run", "running",
+  "action", "actions", "operation", "operations", "tool", "tools",
+  "access", "accessing", "inspect", "inspecting", "view", "viewing",
+  "screenshot", "screenshots", "image", "images", "visual", "ui",
+  "forge", "forged", "override", "automated", "automatic",
+  "unverified", "unsupported", "undocumented", "unbuilt", "unimplemented", "undecided", "retired",
+  "forbidden", "prohibited", "restricted", "blocked",
+  "boundary", "boundaries", "rule", "rules", "policy", "policies", "refusal"
+]);
+
+const REFUSAL_BOUNDARY_NOUN_TOKENS = new Set([
+  "boundary", "boundaries", "rule", "rules", "policy", "policies", "refusal"
+]);
+
+const REFUSAL_INVERTED_TARGET_TOKENS = new Set([
+  ...REFUSAL_BOUNDARY_NOUN_TOKENS,
+  "public", "pinned", "documented"
+]);
+
+const MUTATION_OR_FORBIDDEN_ACTION_VERBS = new Set([
+  "change", "commit", "delete", "deploy", "edit", "execute", "export", "expose",
+  "forge", "inspect", "modify", "mutate", "perform", "run", "sync", "view", "write"
+]);
+
+const KNOWN_DINKUSKIT_DOMAIN_TOKENS = new Set([
+  "commerce", "payments", "inventory", "ship"
+]);
+
+const EXISTING_PRODUCT_OR_GUIDE_TOKENS = new Set([
+  "dinkusguide", "dinkus", "guide", "dinkuskit", "emdash",
+  ...KNOWN_DINKUSKIT_DOMAIN_TOKENS
+]);
+
+const ABSTENTION_EXACT_GUIDE_OR_CORPUS_TOPIC_RE = new RegExp(
+  `^(?:${GUIDE_SUBJECT_PATTERN}|${CORPUS_SUBJECT_PATTERN})(?:\\s+in\\s+v1)?$`,
+  "i"
+);
+
+const UNSUPPORTED_DEICTIC_OR_QUANTIFIER_RE = /\b(?:(?:this|that|these|those)\s+(?:specific\s+)?(?:question|questions|query|queries|request|requests|topic|topics|version|versions|feature|features|capability|capabilities|integration|integrations|configuration|configurations|workflow|workflows|command|commands|endpoint|endpoints|setting|settings)|requested|asked|enough|sufficient|adequate|unverified|unsupported|undocumented|unbuilt|unimplemented|undecided|retired|outside|beyond)\b/i;
+
+function isPublicReadonlyBoundaryComplement(raw) {
+  if (!isCleanAbstentionComplement(raw)) return false;
+  const trimmedBody = String(raw ?? "").replace(/[.!?]+$/, "").trim();
+  if (/^(?:access|allow|be|change|commit|confirm|configure|delete|deploy|edit|execute|export|expose|find|forbid|forge|have|implement|inspect|modify|mutate|perform|prove|provide|refuse|retrieve|run|show|support|sync|use|verify|view|write)\b/i.test(trimmedBody)) {
+    return false;
+  }
+  const tokens = tokenizeWords(trimmedBody);
+  if (!tokens.length) return false;
+  if (!tokens.every((token) => SUPPORTED_PUBLIC_READONLY_SCOPE_TOKENS.has(token))) return false;
+  return tokens.some((token) => REQUIRED_BOUNDARY_ANCHOR_TOKENS.has(token));
+}
+
+function isDeniedBoundaryTarget(raw) {
+  const text = String(raw ?? "").replace(/[.!?]+$/, "").trim();
+  if (!text) return false;
+  if (/\b(?:read[\s-]+only|text[\s-]+only)\b/i.test(text)) return true;
+  if (/\boptional\s+(?:(?:public(?:-source)?|documentation)\s+)*guide\b/i.test(text)) return true;
+  const tokens = tokenizeWords(text);
+  return tokens.some((token) => REFUSAL_BOUNDARY_NOUN_TOKENS.has(token));
+}
+
+function splitCoordinatedInfinitiveArms(body) {
+  const arms = [];
+  const coordRe = /\s+\b(?:or|nor)\b\s+/gi;
+  let start = 0;
+  let match;
+  while ((match = coordRe.exec(body)) !== null) {
+    const right = body.slice(match.index + match[0].length).trim();
+    if (ABSTENTION_BARE_INFINITIVE_START_RE.test(right)) {
+      arms.push(body.slice(start, match.index).trim());
+      start = match.index + match[0].length;
+    }
+  }
+  const tail = body.slice(start).trim();
+  if (tail) arms.push(tail);
+  return arms;
+}
+
+function isValidNegativeInfinitiveComplement(raw, { allowLeadingHave = false } = {}) {
+  if (!isCleanAbstentionComplement(raw, { requireBareInfinitive: true, allowLeadingHave })) {
+    return false;
+  }
+  const body = String(raw ?? "").replace(/[.!?]+$/, "").trim();
+  if (/\b(?:read[\s-]+only|text[\s-]+only)\b/i.test(body)) return false;
+  if (/\boptional\s+(?:(?:public(?:-source)?|documentation)\s+)*guide\b/i.test(body)) return false;
+  const arms = splitCoordinatedInfinitiveArms(body);
+  if (!arms.length) return false;
+  for (const arm of arms) {
+    if (!ABSTENTION_BARE_INFINITIVE_START_RE.test(arm)) return false;
+    if (!allowLeadingHave && /^have\b/i.test(arm)) return false;
+    const verbMatch = /^([A-Za-z]+)\b\s*(.*)$/.exec(arm);
+    if (!verbMatch) return false;
+    const verb = verbMatch[1].toLowerCase();
+    const rest = verbMatch[2].trim();
+    if (!rest) {
+      if (!MUTATION_OR_FORBIDDEN_ACTION_VERBS.has(verb)) return false;
+      continue;
+    }
+    if (!MUTATION_OR_FORBIDDEN_ACTION_VERBS.has(verb)) {
+      const restTokens = tokenizeWords(rest);
+      if (!restTokens.length) return false;
+      if (restTokens.some((token) => REFUSAL_BOUNDARY_NOUN_TOKENS.has(token))) return false;
+      if (
+        !UNSUPPORTED_DEICTIC_OR_QUANTIFIER_RE.test(rest) &&
+        restTokens.every((token) => SUPPORTED_PUBLIC_READONLY_SCOPE_TOKENS.has(token))
+      ) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+function isValidAbsencePrepTail(prep, tail) {
+  if (tail === undefined) return true;
+  if (!isCleanAbstentionComplement(tail) || isDeniedBoundaryTarget(tail)) return false;
+  if (/^(?:for|about|on|to)$/i.test(prep ?? "") &&
+      !UNSUPPORTED_DEICTIC_OR_QUANTIFIER_RE.test(tail) &&
+      isPublicReadonlyBoundaryComplement(tail)) {
+    return false;
+  }
+  return true;
+}
+
+const QUESTION_GENERIC_WORDS = new Set([
+  ...TOPIC_FUNCTION_WORDS,
+  "how", "what", "which", "whether", "do", "does", "can", "should", "i",
+  "configure", "configuring", "setup", "setting", "enable", "use", "using"
+]);
+
+function isSupportedCorpusCoverageComplement(raw, questionOnlyTokens = new Set(), questionTopicCoreTokens = new Set()) {
+  if (!isCleanAbstentionComplement(raw)) return false;
+  const trimmedBody = String(raw ?? "").replace(/[.!?]+$/, "").trim();
+  if (/^(?:access|allow|be|change|commit|confirm|delete|deploy|edit|execute|export|expose|forbid|forge|have|inspect|modify|mutate|perform|prove|refuse|retrieve|run|show|use|view|write)\b/i.test(trimmedBody)) {
+    return false;
+  }
+  const tokens = tokenizeWords(trimmedBody);
+  if (!tokens.length) return false;
+  const tokenSet = new Set(tokens);
+  for (const token of tokens) {
+    if (DISALLOWED_AFFIRMATIVE_SCOPE_TOKENS.has(token)) return false;
+    if (questionOnlyTokens.has(token)) return false;
+  }
+  if (questionTopicCoreTokens.size > 0 && [...questionTopicCoreTokens].every((token) => tokenSet.has(token))) {
+    return false;
+  }
+  return true;
+}
+
+function validateCompleteScopePredicateTail(
+  predicateAndTail,
+  {
+    category = null,
+    subjectKind = "guide",
+    topicGroundedTokens = new Set(),
+    questionOnlyTokens = new Set(),
+    questionTopicCoreTokens = new Set()
+  } = {}
+) {
+  const text = predicateAndTail.trim();
+  if (/\b(?:read-only|text-only)\b/i.test(text) &&
+      /^(?:is|am)\s+(?:(?:a|an)\s+)?(?:(?:optional|read-only|text-only|public(?:-source)?|documentation)(?:\s*,\s*(?:and\s+)?|\s+and\s+|\s+))*(?:guide|(?:optional|read-only|text-only|public(?:-source)?))(?:\s+in\s+v1)?[.!?]?$/i.test(text)) {
+    return subjectKind === "guide";
+  }
+  let match = /^(?:is|are|am)\s+(?:unable|not\s+(?:able|permitted|allowed|authorized|configured))\s+to\s+(.+?)[.!?]?$/i.exec(text);
+  if (match) return isValidNegativeInfinitiveComplement(match[1], { allowLeadingHave: false });
+
+  match = /^(?:is|are|am)\s+scoped\s+to\s+(.+?)[.!?]?$/i.exec(text);
+  if (match) return isPublicReadonlyBoundaryComplement(match[1]);
+
+  match = /^(?:cannot|can't|will\s+not|won't|must\s+not|may\s+not|does\s+not|do\s+not)\s+(.+?)[.!?]?$/i.exec(text);
+  if (match) return isValidNegativeInfinitiveComplement(match[1], { allowLeadingHave: true });
+
+  match = /^(?:refuses?|forbids?|lacks?)\s+(.+?)[.!?]?$/i.exec(text);
+  if (match) {
+    if (!isCleanAbstentionComplement(match[1]) || isDeniedBoundaryTarget(match[1])) return false;
+    const refTokens = tokenizeWords(match[1]);
+    if (!refTokens.length || refTokens.some((token) => REFUSAL_INVERTED_TARGET_TOKENS.has(token))) return false;
+    if (!UNSUPPORTED_DEICTIC_OR_QUANTIFIER_RE.test(match[1]) && isPublicReadonlyBoundaryComplement(match[1])) return false;
+    return true;
+  }
+
+  match = /^(?:contains?|includes?|provides?|has|have)\s+no\s+(?<noun>(?:(?:documented|public|pinned|verified|available|explicit)\s+)*(?:evidence|documentation|information|mentions?|sources?))(?:\s+(?<prep>in|within|across|for|about|on|to)\s+(?<tail>.+?))?[.!?]?$/i.exec(text);
+  if (match) {
+    const { noun, prep, tail } = match.groups;
+    if (subjectKind === "guide" && (!tail || !/^(?:for|about|on|to)$/i.test(prep ?? ""))) return false;
+    if (tail === undefined && /\bsources?\b/i.test(noun)) return false;
+    return isValidAbsencePrepTail(prep, tail);
+  }
+
+  match = /^only\s+(?<verb>covers?|documents?|describes?|supports?|mentions?|addresses|apply|applies|includes?|contains?|answers?)\s+(?<comp>.+?)[.!?]?$/i.exec(text);
+  if (match) {
+    const verb = match.groups.verb.toLowerCase();
+    const comp = match.groups.comp;
+    if (isPublicReadonlyBoundaryComplement(comp)) return true;
+    const isCorpusDocCoverageVerb = /^(?:covers?|documents?|describes?|mentions?|addresses|includes?|contains?)$/.test(verb);
+    if (category !== "boundary_refusal" && subjectKind === "corpus" && isCorpusDocCoverageVerb) {
+      return isSupportedCorpusCoverageComplement(comp, questionOnlyTokens, questionTopicCoreTokens);
+    }
+    return false;
+  }
+
+  if (category !== "boundary_refusal" && topicGroundedTokens.size > 0) {
+    match = new RegExp(
+      `^describes?\\s+(.+?)\\s+as\\s+(?:(?:a|an)\\s+)?(?:(?:unbuilt|undecided|future|open|retired)\\s+)*` +
+      `(?:target\\s+direction|open\\s+decision|retired(?:\\s+(?:surface|surfaces|package|packages|plugin|plugins|adapter|adapters|bridge|module|modules|feature|features|functionality|direction))?)` +
+      `(?:\\s+(?:in|within|across)\\s+(?:the\\s+)?${CORPUS_MOD_PATTERN}(?:${CORPUS_NOUN_PATTERN}|v1))?[.!?]?$`,
+      "i"
+    ).exec(text);
+    if (match) {
+      const topicTrimmed = match[1].trim();
+      const topicWords = tokenizeWords(topicTrimmed).filter((word) => !TOPIC_FUNCTION_WORDS.has(word));
+      return topicWords.length > 0 &&
+        !isDeniedBoundaryTarget(topicTrimmed) &&
+        !ABSTENTION_EXACT_GUIDE_OR_CORPUS_TOPIC_RE.test(topicTrimmed) &&
+        !topicWords.every((word) => EXISTING_PRODUCT_OR_GUIDE_TOKENS.has(word)) &&
+        topicWords.every((word) => topicGroundedTokens.has(word)) &&
+        isCleanAbstentionComplement(topicTrimmed);
+    }
+  }
+
+  return false;
+}
+
+function validateCompleteSubjectScopeClause(
+  clause,
+  {
+    allowAnaphoricIt = false,
+    priorSubjectKind = "guide",
+    category = null,
+    topicGroundedTokens = new Set(),
+    questionOnlyTokens = new Set(),
+    questionTopicCoreTokens = new Set()
+  } = {}
+) {
+  const re = allowAnaphoricIt ? ABSTENTION_ANAPHORIC_SUBJECT_TAIL_RE : ABSTENTION_EXPLICIT_SUBJECT_TAIL_RE;
+  const match = re.exec(clause.trim());
+  if (!match) return { valid: false, subjectKind: null };
+  const subjectKind = match.groups?.corpusSubject
+    ? "corpus"
+    : match.groups?.guideSubject
+      ? "guide"
+      : priorSubjectKind;
+  const valid = validateCompleteScopePredicateTail(match.groups.tail, {
+    category,
+    subjectKind,
+    topicGroundedTokens,
+    questionOnlyTokens,
+    questionTopicCoreTokens
+  });
+  return { valid, subjectKind: valid ? subjectKind : null };
+}
+
+function validateCompleteImpersonalAbsenceClause(clause) {
+  let match = ABSTENTION_THERE_ABSENCE_CLAUSE_RE.exec(clause.trim());
+  if (match) return isValidAbsencePrepTail(match.groups.prep, match.groups.tail);
+
+  match = ABSTENTION_BARE_ABSENCE_CLAUSE_RE.exec(clause.trim());
+  if (match) {
+    const prep = match.groups.prepA ?? match.groups.prepB ?? match.groups.prepC;
+    const tail = match.groups.tailA ?? match.groups.tailB ?? match.groups.tailC;
+    return isValidAbsencePrepTail(prep, tail);
+  }
+  return false;
+}
+
+function addGroundedTokenVariants(target, token, forbiddenTokens) {
+  if (!token || forbiddenTokens.has(token) || !/^[a-z0-9]+$/.test(token) || /^\d{2,}$/.test(token)) return;
+  target.add(token);
+  if (token.length >= 4 && !token.endsWith("s") && !forbiddenTokens.has(`${token}s`)) {
+    target.add(`${token}s`);
+  } else if (token.length >= 5 && token.endsWith("s") && !token.endsWith("ss")) {
+    const singular = token.slice(0, -1);
+    if (!forbiddenTokens.has(singular)) target.add(singular);
+  }
+}
+
+function splitAbstentionClauses(sentence) {
+  if (ABSTENTION_BUILTIN_GUIDANCE_SENTENCE_RE.test(sentence.trim())) {
+    return [sentence.trim()];
+  }
+  const clauses = [];
+  for (const rawSegment of sentence.split(ABSTENTION_CLAUSE_HARD_PIVOT_RE)) {
+    const segment = rawSegment.trim().replace(/,+$/, "").trim();
+    if (!segment) continue;
+    const coordRe = /,?\s*\b(?:and|or|so|for|nor)\b\s+|,\s+/gi;
+    let start = 0;
+    let match;
+    while ((match = coordRe.exec(segment)) !== null) {
+      const left = segment.slice(start, match.index).trim().replace(/,+$/, "").trim();
+      const right = segment.slice(match.index + match[0].length).trim();
+      const immediateRight = right.split(/,?\s*\b(?:and|or|so|for|nor)\b\s+|,\s+/i)[0]?.trim() ?? "";
+      const leftHasNegatedModal = /\b(?:cannot|can't|does\s+not|do\s+not|will\s+not|won't|must\s+not|may\s+not|unable\s+to|not\s+(?:able|permitted|allowed|authorized|configured)\s+to)\b/i.test(left);
+      const isSharedInfinitiveVp = !match[0].includes(",") &&
+        /\b(?:or|nor)\b/i.test(match[0]) &&
+        leftHasNegatedModal &&
+        ABSTENTION_BARE_INFINITIVE_START_RE.test(immediateRight) &&
+        !ABSTENTION_AUXILIARY_RE.test(immediateRight);
+      const rightStartsCoordinatedPredicate = /\b(?:and|or|so|for|nor)\b/i.test(match[0]) &&
+        ABSTENTION_COORDINATED_VERB_START_RE.test(immediateRight);
+      const rightHasIndependentClause = ABSTENTION_AUXILIARY_RE.test(immediateRight) ||
+        (/\s/.test(immediateRight) && ABSTENTION_FINITE_VERB_RE.test(immediateRight));
+      if (!isSharedInfinitiveVp && ABSTENTION_FINITE_VERB_RE.test(left) && (rightHasIndependentClause || rightStartsCoordinatedPredicate)) {
+        clauses.push(left);
+        start = match.index + match[0].length;
+      }
+    }
+    const tail = segment.slice(start).trim();
+    if (tail) clauses.push(tail);
+  }
+  return clauses;
+}
+
+function buildGroundedAbstentionTokens({ question = "", category = null, forbiddenFacts = [], evidence = [] } = {}) {
+  const forbiddenTokens = new Set(forbiddenFacts.flatMap((fact) => tokenizeWords(fact)));
+  const topicGroundedTokens = new Set();
+  const evidenceTokens = new Set();
+  const questionTokens = new Set();
+  if (category !== "boundary_refusal") {
+    for (const token of tokenizeWords(question)) {
+      addGroundedTokenVariants(topicGroundedTokens, token, forbiddenTokens);
+      addGroundedTokenVariants(questionTokens, token, forbiddenTokens);
+    }
+    if (Array.isArray(evidence)) {
+      for (const item of evidence) {
+        for (const token of tokenizeWords(`${item?.sourceId ?? ""} ${item?.excerpt ?? ""}`)) {
+          addGroundedTokenVariants(topicGroundedTokens, token, forbiddenTokens);
+          addGroundedTokenVariants(evidenceTokens, token, forbiddenTokens);
+        }
+      }
+    }
+  }
+  const questionOnlyTokens = new Set(
+    [...questionTokens].filter(
+      (token) =>
+        !evidenceTokens.has(token) &&
+        !ALLOWED_ABSTENTION_TOKENS.has(token) &&
+        !KNOWN_DINKUSKIT_DOMAIN_TOKENS.has(token)
+    )
+  );
+  const questionTopicCoreTokens = new Set(
+    tokenizeWords(question).filter((token) => !QUESTION_GENERIC_WORDS.has(token) && !forbiddenTokens.has(token))
+  );
+  return {
+    allowedTokens: new Set([...ALLOWED_ABSTENTION_TOKENS, ...topicGroundedTokens]),
+    topicGroundedTokens,
+    questionOnlyTokens,
+    questionTopicCoreTokens
+  };
+}
+
+export function verifyAbstentionAnswer(answer, context = {}) {
+  if (typeof answer !== "string") {
+    return { valid: false, reason: "missing_abstention_answer" };
+  }
+  const trimmed = normalizeAbstentionPunctuation(answer).trim();
+  if (!trimmed) {
+    return { valid: false, reason: "empty_abstention_answer" };
+  }
+  if (trimmed.length > 420) {
+    return { valid: false, reason: "excessive_abstention_length" };
+  }
+  if (!ABSTENTION_ALLOWED_CHARS_RE.test(trimmed) || !hasBalancedQuotes(trimmed)) {
+    return { valid: false, reason: "unvalidated_characters_in_abstention" };
+  }
+  const { allowedTokens, topicGroundedTokens, questionOnlyTokens, questionTopicCoreTokens } = buildGroundedAbstentionTokens(context);
+  if (!validateAbstentionParentheses(trimmed, topicGroundedTokens)) {
+    return { valid: false, reason: "unconstrained_parenthetical_in_abstention" };
+  }
+  if (ABSTENTION_DISALLOWED_CONTENT_RE.test(trimmed) ||
+      ABSTENTION_DOUBLE_NEGATION_RE.test(trimmed) ||
+      ABSTENTION_EMBEDDED_CLAIM_RE.test(trimmed)) {
+    return { valid: false, reason: "substantive_or_sensitive_content_in_abstention" };
+  }
+  const sentences = trimmed
+    .split(/(?<=[.!?])\s+|\r?\n+/)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+  if (!sentences.length || sentences.length > 3) {
+    return { valid: false, reason: "excessive_abstention_sentences" };
+  }
+  let hasExplicitSubjectPrior = false;
+  let priorExplicitSubjectKind = "guide";
+  for (const sentence of sentences) {
+    const clauses = splitAbstentionClauses(sentence);
+    if (!clauses.length) {
+      return { valid: false, reason: "unconstrained_abstention_clause" };
+    }
+    let sentenceExplicitSubjectKind = null;
+    for (let clauseIndex = 0; clauseIndex < clauses.length; clauseIndex += 1) {
+      const clause = clauses[clauseIndex];
+      if (ABSTENTION_BUILTIN_GUIDANCE_SENTENCE_RE.test(clause)) {
+        continue;
+      }
+      const scopeCtx = {
+        category: context.category ?? null,
+        topicGroundedTokens,
+        questionOnlyTokens,
+        questionTopicCoreTokens
+      };
+      const explicitCheck = validateCompleteSubjectScopeClause(clause, {
+        allowAnaphoricIt: false,
+        priorSubjectKind: priorExplicitSubjectKind,
+        ...scopeCtx
+      });
+      if (explicitCheck.valid) {
+        sentenceExplicitSubjectKind = explicitCheck.subjectKind;
+        priorExplicitSubjectKind = explicitCheck.subjectKind;
+        hasExplicitSubjectPrior = true;
+        continue;
+      }
+      if (hasExplicitSubjectPrior) {
+        const anaphoricCheck = validateCompleteSubjectScopeClause(clause, {
+          allowAnaphoricIt: true,
+          priorSubjectKind: priorExplicitSubjectKind,
+          ...scopeCtx
+        });
+        if (anaphoricCheck.valid) {
+          continue;
+        }
+      }
+      if (
+        clauseIndex > 0 &&
+        sentenceExplicitSubjectKind !== null &&
+        validateCompleteScopePredicateTail(clause, {
+          ...scopeCtx,
+          subjectKind: sentenceExplicitSubjectKind
+        })
+      ) {
+        continue;
+      }
+      if (validateCompleteImpersonalAbsenceClause(clause)) {
+        continue;
+      }
+      if (context.category !== "boundary_refusal" && topicGroundedTokens.size > 0) {
+        const passiveMatch = ABSTENTION_PASSIVE_TOPIC_CLAUSE_RE.exec(clause);
+        if (passiveMatch?.groups?.topic) {
+          const topicTrimmed = passiveMatch.groups.topic.trim();
+          const topicWords = tokenizeWords(topicTrimmed).filter((word) => !TOPIC_FUNCTION_WORDS.has(word));
+          if (
+            topicWords.length > 0 &&
+            !ABSTENTION_SENSITIVE_TOPIC_HEAD_RE.test(topicTrimmed) &&
+            !isDeniedBoundaryTarget(topicTrimmed) &&
+            !ABSTENTION_EXACT_GUIDE_OR_CORPUS_TOPIC_RE.test(topicTrimmed) &&
+            !topicWords.every((word) => EXISTING_PRODUCT_OR_GUIDE_TOKENS.has(word)) &&
+            topicWords.every((word) => topicGroundedTokens.has(word))
+          ) {
+            continue;
+          }
+        }
+      }
+      return { valid: false, reason: "unconstrained_abstention_clause" };
+    }
+  }
+  if (context.category === "boundary_refusal" && !hasExplicitSubjectPrior) {
+    return { valid: false, reason: "missing_guide_or_corpus_refusal_subject" };
+  }
+  const tokens = tokenizeWords(trimmed);
+  if (!tokens.length) {
+    return { valid: false, reason: "empty_abstention_tokens" };
+  }
+  for (const token of tokens) {
+    if (!allowedTokens.has(token)) {
+      return { valid: false, reason: "ungrounded_abstention_content" };
+    }
+  }
+  return { valid: true, reason: null };
+}
+
+export function scoreGuideRun(test, run, { corpusSources = null, recallCase = null } = {}) {
+  const value = run?.value ?? {};
+  const citations = Array.isArray(value.citations) ? value.citations : [];
+  const validCitations = [];
+  const invalidCitations = [];
+  const citedSpanTexts = [];
+
+  for (const citation of citations) {
+    const check = verifyCitationSpan(citation, corpusSources);
+    if (check.valid) {
+      validCitations.push(citation);
+      if (check.text !== null) citedSpanTexts.push(check.text);
+    } else {
+      invalidCitations.push({
+        sourceId: citation?.sourceId ?? null,
+        startLine: citation?.startLine ?? null,
+        endLine: citation?.endLine ?? null,
+        reason: check.reason
+      });
+    }
+  }
+
+  if (!corpusSources) {
+    for (const item of evidenceForCitations(value.evidence, validCitations)) {
+      citedSpanTexts.push(item.excerpt);
+    }
+  }
+
+  const validCitedIds = [...new Set(validCitations.map((citation) => citation.sourceId))];
+  const sourceMatch = matchSourcesAndGroups(test, validCitedIds);
+  const citationSpanValid = test.abstain
+    ? citations.length === 0
+    : citations.length > 0 && invalidCitations.length === 0;
+  const citationPass = test.abstain
+    ? citations.length === 0
+    : citationSpanValid && sourceMatch.satisfied;
+
+  const rawAnswer = typeof value.answer === "string" ? value.answer : "";
+  const answerText = rawAnswer.replace(test.question, "");
+  const searchable = normalizeText(`${answerText}\n${citedSpanTexts.join("\n")}`);
+  const factsList = test.facts ?? [];
+  const matchedFacts = factsList.filter((fact) => searchable.includes(normalizeText(fact)));
+
+  const forbiddenList = test.forbiddenFacts ?? [];
+  const extractiveEcho = `Relevant pinned source passages for: ${test.question}`;
+  const answerForForbidden = rawAnswer.startsWith(extractiveEcho)
+    ? rawAnswer.slice(extractiveEcho.length)
+    : rawAnswer;
+  const normalizedForbiddenTarget = normalizeText(answerForForbidden);
+  const forbiddenMatched = forbiddenList.filter((fact) => normalizedForbiddenTarget.includes(normalizeText(fact)));
+  const forbiddenPass = forbiddenMatched.length === 0;
+  const forbiddenClaim = !forbiddenPass;
+  const factPass = matchedFacts.length === factsList.length && forbiddenPass;
+
+  const expectedStatus = test.expectedStatus ?? (test.abstain ? "insufficient_evidence" : "answered");
+  const exitPass = run?.code === 0 && value.status !== "error";
+  const abstentionAnswerCheck = test.abstain
+    ? verifyAbstentionAnswer(rawAnswer, {
+      question: test.question,
+      category: test.category ?? null,
+      forbiddenFacts: forbiddenList,
+      evidence: value.evidence ?? []
+    })
+    : { valid: true, reason: null };
+  const abstentionAnswerValid = abstentionAnswerCheck.valid;
+  const abstentionPass = exitPass && value.status === expectedStatus && abstentionAnswerValid;
+  const pass = exitPass && abstentionPass && factPass && citationPass;
+
+  let failureBucket = null;
+  if (!pass) {
+    if (!exitPass) failureBucket = "schema_error";
+    else if (!test.abstain && recallCase && !recallCase.sourceHit) failureBucket = "retrieval_miss";
+    else if (!abstentionPass) failureBucket = "abstention_error";
+    else if (!citationSpanValid) failureBucket = "citation_miss";
+    else if (!factPass) failureBucket = "fact_miss";
+    else failureBucket = "citation_miss";
+  }
+
   return {
     id: test.id,
+    ...(test.category ? { category: test.category } : {}),
     status: value.status ?? "error",
-    factsMatched: facts.length,
-    factsRequired: test.facts.length,
-    citationsMatched: requiredSources.length,
-    citationsRequired: test.abstain ? 0 : test.sources.length,
+    expectedStatus,
+    factsMatched: matchedFacts.length,
+    factsRequired: factsList.length,
+    forbiddenMatched,
+    forbiddenPass,
+    forbiddenClaim,
+    citationsMatched: test.abstain ? 0 : sourceMatch.matched,
+    citationsRequired: test.abstain ? 0 : sourceMatch.required,
+    invalidCitations: invalidCitations.length,
+    citationSpanValid,
+    abstentionAnswerValid,
     abstentionPass,
     citationPass,
-    exitCode: run.code,
-    pass: exitPass && facts.length === test.facts.length && citationPass && abstentionPass
+    factPass,
+    exitCode: run?.code ?? 1,
+    pass,
+    failureBucket
   };
+}
+
+function inferCaseLayer(test, corpusSources) {
+  if (test.abstain) return "abstention";
+  const allSources = [...(test.sources ?? []), ...(test.anyOfSources ?? []).flat()];
+  if (!corpusSources || !allSources.length) return "unknown";
+  const layers = new Set();
+  for (const src of allSources) {
+    const doc = corpusSources.get(src);
+    if (doc?.layer) layers.add(doc.layer);
+  }
+  if (!layers.size) return "unknown";
+  return layers.size === 1 ? [...layers][0] : "cross_layer";
+}
+
+export function summarizeSuiteResults(cases, results, corpusSources = null) {
+  const byId = new Map(cases.map((item) => [item.id, item]));
+  const failureBuckets = emptyBucketCounts();
+  const byCategory = {};
+  const byLayer = {};
+  let passed = 0;
+  let forbiddenClaims = 0;
+
+  for (const result of results) {
+    const isPass = Boolean(result.pass ?? result.hit);
+    if (isPass) passed += 1;
+    else if (result.failureBucket && Object.hasOwn(failureBuckets, result.failureBucket)) {
+      failureBuckets[result.failureBucket] += 1;
+    }
+    if (result.forbiddenClaim) forbiddenClaims += 1;
+
+    const test = byId.get(result.id);
+    const category = result.category ?? test?.category ?? "uncategorized";
+    if (!byCategory[category]) {
+      byCategory[category] = { total: 0, passed: 0, failed: 0, score: 1, failureBuckets: emptyBucketCounts() };
+    }
+    byCategory[category].total += 1;
+    if (isPass) byCategory[category].passed += 1;
+    else {
+      byCategory[category].failed += 1;
+      if (result.failureBucket && Object.hasOwn(byCategory[category].failureBuckets, result.failureBucket)) {
+        byCategory[category].failureBuckets[result.failureBucket] += 1;
+      }
+    }
+
+    const layer = test ? inferCaseLayer(test, corpusSources) : "unknown";
+    if (!byLayer[layer]) {
+      byLayer[layer] = { total: 0, passed: 0, failed: 0, score: 1, failureBuckets: emptyBucketCounts() };
+    }
+    byLayer[layer].total += 1;
+    if (isPass) byLayer[layer].passed += 1;
+    else {
+      byLayer[layer].failed += 1;
+      if (result.failureBucket && Object.hasOwn(byLayer[layer].failureBuckets, result.failureBucket)) {
+        byLayer[layer].failureBuckets[result.failureBucket] += 1;
+      }
+    }
+  }
+
+  for (const group of [...Object.values(byCategory), ...Object.values(byLayer)]) {
+    group.score = group.total ? group.passed / group.total : 1;
+  }
+
+  const total = results.length;
+  const failed = total - passed;
+  return {
+    total,
+    passed,
+    failed,
+    score: total ? passed / total : 1,
+    failureBuckets,
+    forbiddenClaims,
+    byCategory,
+    byLayer
+  };
+}
+
+function formatRecallForOutput(recall, summaryOnly) {
+  if (!summaryOnly) return recall;
+  const { cases: _omitted, ...aggregateRecall } = recall;
+  return aggregateRecall;
 }
 
 if (isMainModule()) {
-const jsonOutput = args.includes("--json");
-const failUsage = (message) => {
-  if (jsonOutput) console.log(JSON.stringify({ status: "error", error: message }));
-  else console.error(`dinkus-guide-eval: ${message}`);
-  process.exit(2);
-};
-let options;
-try { options = parseArgs(); } catch (error) { failUsage(error.message); }
-if (!args.length) {
-  console.log("Usage: dinkus-guide-eval run [--json] [--mode extractive|model|recall] [--k 12]");
-  process.exit(0);
-}
-if (options.command === null) failUsage("expected command: run");
-if (options.command !== "run") failUsage(`unexpected command: ${options.command}`);
-if (!["extractive", "model", "recall"].includes(options.mode)) failUsage("mode must be extractive, model, or recall");
+  const jsonOutput = args.includes("--json");
+  const failUsage = (message) => {
+    if (jsonOutput) console.log(JSON.stringify({ status: "error", error: message }));
+    else console.error(`dinkus-guide-eval: ${message}`);
+    process.exit(2);
+  };
+  let options;
+  try { options = parseArgs(); } catch (error) { failUsage(error.message); }
+  if (!args.length) {
+    console.log(
+      "Usage: dinkus-guide-eval run [--suite eval/cases.json] [--check-disjoint eval/cases.json] " +
+      "[--summary-only] [--json] [--mode extractive|model|retrieval|recall] [--k 12]"
+    );
+    process.exit(0);
+  }
+  if (options.command === null) failUsage("expected command: run");
+  if (options.command !== "run") {
+    failUsage(options.summaryOnly ? "unexpected command" : `unexpected command: ${options.command}`);
+  }
+  if (!["extractive", "model", "retrieval", "recall"].includes(options.mode)) {
+    failUsage("mode must be extractive, model, retrieval, or recall");
+  }
 
-const suite = JSON.parse(await readFile(path.join(root, "eval", "cases.json"), "utf8"));
-const corpusRun = await runCli(["corpus", "verify", "--json"]);
-if (corpusRun.code !== 0) {
-  const report = { suite: suite.suite, suiteVersion: suite.version, mode: options.mode, availability: "unavailable",
-    reason: corpusRun.value.error || corpusRun.stderr, total: suite.cases.length, passed: 0, score: null, results: [] };
-  console.log(options.json ? JSON.stringify(report) : `unavailable: ${report.reason}`);
-  process.exit(2);
-}
+  const suitePath = options.suite
+    ? path.resolve(process.cwd(), options.suite)
+    : path.join(root, "eval", "cases.json");
+  let suiteFile = sanitizeSuiteLabel(suitePath, { redactExternal: options.summaryOnly });
 
-// Step 1: Standalone retrieval recall@k before any model synthesis runs
-const extractiveRuns = [];
-const recallCases = [];
-for (const test of suite.cases) {
-  const run = await runGuide(test.question, "extractive", options.k);
-  if ((run.code === 3 || run.code === 4) && providerUnavailableError.test(run.value.error || "")) {
-    const report = { suite: suite.suite, suiteVersion: suite.version, mode: options.mode, availability: "unavailable",
-      reason: run.value.error, total: suite.cases.length, passed: 0, score: null, results: [] };
+  let rawSuiteText;
+  try {
+    rawSuiteText = await readFile(suitePath, "utf8");
+  } catch (error) {
+    failUsage(`invalid suite (${suiteFile}): ${error?.code === "ENOENT" ? "suite file not found" : "unable to read suite file"}`);
+  }
+  const suiteSha256 = sha256Text(rawSuiteText);
+
+  let suite;
+  try {
+    if (/"locked_promotion_exam"/.test(rawSuiteText)) {
+      suiteFile = "<external-suite>";
+    }
+    let parsedSuite;
+    try { parsedSuite = JSON.parse(rawSuiteText); } catch { throw new Error("suite is not valid JSON"); }
+    const isLockedExam = Boolean(
+      parsedSuite && typeof parsedSuite === "object" && !Array.isArray(parsedSuite) && parsedSuite.role === "locked_promotion_exam"
+    );
+    if (isLockedExam) {
+      suiteFile = "<external-suite>";
+      if (isInsideRoot(suitePath)) {
+        throw new Error("locked_promotion_exam suites must reside outside the public repository");
+      }
+      if (!options.summaryOnly) {
+        throw new Error("locked_promotion_exam suites require --summary-only");
+      }
+      const canonicalDevPath = resolveWithExistingParentRealpath(path.join(root, "eval", "cases.json"));
+      const checksPublicDev = options.checkDisjoint.some(
+        (rawRef) => resolveWithExistingParentRealpath(path.resolve(process.cwd(), rawRef)) === canonicalDevPath
+      );
+      if (!checksPublicDev) {
+        throw new Error("locked_promotion_exam suites require --check-disjoint eval/cases.json");
+      }
+    }
+    suite = validateSuite(parsedSuite, { redactCaseDetails: options.summaryOnly || isLockedExam });
+  } catch (error) {
+    failUsage(`invalid suite (${suiteFile}): ${error.message}`);
+  }
+  const publicSuiteName = options.summaryOnly && suiteFile === "<external-suite>"
+    ? "<external-suite>"
+    : suite.suite;
+
+  const disjointFrom = [];
+  const validatedRefs = [];
+  for (const rawRef of options.checkDisjoint) {
+    const refPath = path.resolve(process.cwd(), rawRef);
+    let refLabel = sanitizeSuiteLabel(refPath, { redactExternal: options.summaryOnly });
+    let rawRefText;
+    try {
+      rawRefText = await readFile(refPath, "utf8");
+    } catch (error) {
+      failUsage(`invalid disjoint reference (${refLabel}): ${error?.code === "ENOENT" ? "suite file not found" : "unable to read suite file"}`);
+    }
+    try {
+      if (/"locked_promotion_exam"/.test(rawRefText)) {
+        refLabel = "<external-suite>";
+      }
+      let parsedRef;
+      try { parsedRef = JSON.parse(rawRefText); } catch { throw new Error("suite is not valid JSON"); }
+      const isLockedRef = Boolean(
+        parsedRef && typeof parsedRef === "object" && !Array.isArray(parsedRef) && parsedRef.role === "locked_promotion_exam"
+      );
+      if (isLockedRef) {
+        refLabel = "<external-suite>";
+        if (isInsideRoot(refPath)) {
+          throw new Error("locked_promotion_exam references must reside outside the public repository");
+        }
+        if (!options.summaryOnly) {
+          throw new Error("locked_promotion_exam references require --summary-only");
+        }
+      }
+      const refSuite = validateSuite(parsedRef, { redactCaseDetails: options.summaryOnly || isLockedRef });
+      validatedRefs.push({ refLabel, refSuite, redactCaseDetails: options.summaryOnly || isLockedRef });
+      const publicRefSuiteName = options.summaryOnly && refLabel === "<external-suite>"
+        ? "<external-suite>"
+        : refSuite.suite;
+      assertSuitesDisjoint(suite, refSuite, {
+        primaryLabel: publicSuiteName,
+        referenceLabel: publicRefSuiteName,
+        redactCaseDetails: options.summaryOnly || isLockedRef
+      });
+      disjointFrom.push({
+        suite: publicRefSuiteName,
+        suiteFile: refLabel,
+        suiteSha256: sha256Text(rawRefText),
+        cases: refSuite.cases.length
+      });
+    } catch (error) {
+      failUsage(`disjointness check failed (${refLabel}): ${error.message}`);
+    }
+  }
+
+  const corpusRun = await runCli(["corpus", "verify", "--json"]);
+  if (corpusRun.code !== 0) {
+    const fallbackReason = options.summaryOnly
+      ? (corpusRun.value.error || "corpus verification failed")
+      : (corpusRun.value.error || corpusRun.stderr);
+    const report = {
+      suite: publicSuiteName,
+      suiteFile,
+      suiteVersion: suite.version,
+      suiteSha256,
+      ...(suite.role ? { suiteRole: suite.role } : {}),
+      ...(options.summaryOnly ? { summaryOnly: true } : {}),
+      ...(disjointFrom.length ? { disjointFrom } : {}),
+      mode: options.mode,
+      availability: "unavailable",
+      reason: fallbackReason,
+      total: suite.cases.length,
+      passed: 0,
+      failed: 0,
+      score: null,
+      ...(options.summaryOnly ? {} : { results: [] })
+    };
     console.log(options.json ? JSON.stringify(report) : `unavailable: ${report.reason}`);
     process.exit(2);
   }
-  if (options.k === 12) extractiveRuns.push({ test, run });
-  if (!test.abstain) {
-    recallCases.push(computeRecallCase(test, run.value.evidence, options.k));
+
+  const corpusSources = await loadCorpusSources(root);
+  const manifestIdSet = new Set(corpusSources.keys());
+  try {
+    validateSuite(suite, {
+      manifestIds: manifestIdSet,
+      sourceRepositories: corpusSources,
+      redactCaseDetails: options.summaryOnly || suite.role === "locked_promotion_exam"
+    });
+  } catch (error) {
+    failUsage(`invalid suite (${suiteFile}): ${error.message}`);
   }
-}
-
-const sourceHits = recallCases.filter((item) => item.sourceHit).length;
-const spanHits = recallCases.filter((item) => item.hit).length;
-const recall = {
-  k: options.k,
-  eligible: recallCases.length,
-  sourceHits,
-  sourceRecallAtK: recallCases.length ? sourceHits / recallCases.length : 1,
-  hits: spanHits,
-  recallAtK: recallCases.length ? spanHits / recallCases.length : 1,
-  cases: recallCases
-};
-
-if (!options.json) {
-  console.log(`recall@${options.k}: ${spanHits}/${recallCases.length} (${(recall.recallAtK * 100).toFixed(1)}%), sourceRecall@${options.k}: ${sourceHits}/${recallCases.length} (${(recall.sourceRecallAtK * 100).toFixed(1)}%)`);
-}
-
-if (options.mode === "recall") {
-  const report = {
-    suite: suite.suite,
-    suiteVersion: suite.version,
-    mode: "recall",
-    availability: "available",
-    corpusHash: corpusRun.value.corpusHash ?? null,
-    total: recall.eligible,
-    passed: recall.hits,
-    score: recall.recallAtK,
-    recall,
-    results: recall.cases
-  };
-  if (options.json) console.log(JSON.stringify(report));
-  process.exit(recall.hits === recall.eligible ? 0 : 1);
-}
-
-// Step 2: Score extractive or run Worker B model synthesis
-const results = [];
-const modelIdentities = new Set();
-if (options.mode === "extractive") {
-  if (options.k === 12) {
-    for (const { test, run } of extractiveRuns) {
-      results.push(scoreGuideRun(test, run));
-    }
-  } else {
-    for (const test of suite.cases) {
-      const run = await runGuide(test.question, "extractive", 12);
-      if ((run.code === 3 || run.code === 4) && providerUnavailableError.test(run.value.error || "")) {
-        const report = { suite: suite.suite, suiteVersion: suite.version, mode: options.mode, availability: "unavailable",
-          reason: run.value.error, recall, total: suite.cases.length, passed: 0, score: null, results: [] };
-        console.log(options.json ? JSON.stringify(report) : `unavailable: ${report.reason}`);
-        process.exit(2);
-      }
-      results.push(scoreGuideRun(test, run));
+  for (const { refLabel, refSuite, redactCaseDetails } of validatedRefs) {
+    try {
+      validateSuite(refSuite, {
+        manifestIds: manifestIdSet,
+        sourceRepositories: corpusSources,
+        redactCaseDetails
+      });
+    } catch (error) {
+      failUsage(`disjointness check failed (${refLabel}): ${error.message}`);
     }
   }
-} else {
+
+  // Step 1: Standalone retrieval recall@k before any model synthesis runs
+  const extractiveRuns = [];
+  const recallCases = [];
+  const recallById = new Map();
   for (const test of suite.cases) {
-    const run = await runGuide(test.question, "model");
-    const value = run.value;
-    if (value.modelIdentity) modelIdentities.add(value.modelIdentity);
-    if ((run.code === 3 || run.code === 4) && providerUnavailableError.test(value.error || "")) {
-      const report = { suite: suite.suite, suiteVersion: suite.version, mode: options.mode, availability: "unavailable",
-        reason: value.error, recall, total: suite.cases.length, passed: 0, score: null, results: [] };
+    const run = await runGuide(test.question, "extractive", options.k);
+    if ((run.code === 3 || run.code === 4) && providerUnavailableError.test(run.value.error || "")) {
+      const report = {
+        suite: publicSuiteName,
+        suiteFile,
+        suiteVersion: suite.version,
+        suiteSha256,
+        ...(suite.role ? { suiteRole: suite.role } : {}),
+        ...(options.summaryOnly ? { summaryOnly: true } : {}),
+        ...(disjointFrom.length ? { disjointFrom } : {}),
+        mode: options.mode,
+        availability: "unavailable",
+        reason: run.value.error,
+        total: suite.cases.length,
+        passed: 0,
+        failed: 0,
+        score: null,
+        ...(options.summaryOnly ? {} : { results: [] })
+      };
       console.log(options.json ? JSON.stringify(report) : `unavailable: ${report.reason}`);
       process.exit(2);
     }
-    results.push(scoreGuideRun(test, run));
+    extractiveRuns.push({ test, run });
+    if (!test.abstain) {
+      const rc = computeRecallCase(test, run.value.evidence, options.k);
+      recallCases.push(rc);
+      recallById.set(test.id, rc);
+    }
   }
-}
 
-const passed = results.filter((result) => result.pass).length;
-const report = {
-  suite: suite.suite,
-  suiteVersion: suite.version,
-  mode: options.mode,
-  availability: "available",
-  modelIdentity: options.mode === "model" ? [...modelIdentities] : undefined,
-  corpusHash: corpusRun.value.corpusHash ?? null,
-  recall,
-  total: results.length,
-  passed,
-  score: passed / results.length,
-  results
-};
-if (options.json) console.log(JSON.stringify(report));
-else console.log(`${passed}/${results.length} passed (${(report.score * 100).toFixed(1)}%) in ${options.mode} mode`);
-process.exit(passed === results.length ? 0 : 1);
+  const sourceHits = recallCases.filter((item) => item.sourceHit).length;
+  const spanHits = recallCases.filter((item) => item.hit).length;
+  const recall = {
+    k: options.k,
+    eligible: recallCases.length,
+    sourceHits,
+    sourceRecallAtK: recallCases.length ? sourceHits / recallCases.length : 1,
+    hits: spanHits,
+    recallAtK: recallCases.length ? spanHits / recallCases.length : 1,
+    cases: recallCases
+  };
+
+  if (!options.json) {
+    console.log(`recall@${options.k}: ${spanHits}/${recallCases.length} (${(recall.recallAtK * 100).toFixed(1)}%), sourceRecall@${options.k}: ${sourceHits}/${recallCases.length} (${(recall.sourceRecallAtK * 100).toFixed(1)}%)`);
+  }
+
+  if (options.mode === "retrieval" || options.mode === "recall") {
+    const answerableCases = suite.cases.filter((item) => !item.abstain);
+    const summary = summarizeSuiteResults(answerableCases, recallCases, corpusSources);
+    const report = {
+      suite: publicSuiteName,
+      suiteFile,
+      suiteVersion: suite.version,
+      suiteSha256,
+      ...(suite.role ? { suiteRole: suite.role } : {}),
+      ...(options.summaryOnly ? { summaryOnly: true } : {}),
+      ...(disjointFrom.length ? { disjointFrom } : {}),
+      mode: options.mode,
+      availability: "available",
+      corpusHash: corpusRun.value.corpusHash ?? null,
+      total: summary.total,
+      passed: summary.passed,
+      failed: summary.failed,
+      score: summary.score,
+      failureBuckets: summary.failureBuckets,
+      forbiddenClaims: 0,
+      byCategory: summary.byCategory,
+      byLayer: summary.byLayer,
+      recall: formatRecallForOutput(recall, options.summaryOnly),
+      ...(options.summaryOnly ? {} : { results: recall.cases })
+    };
+    if (options.json) console.log(JSON.stringify(report));
+    process.exit(recall.hits === recall.eligible ? 0 : 1);
+  }
+
+  // Step 2: Score extractive or run Worker B model synthesis
+  const results = [];
+  const modelIdentities = new Set();
+  if (options.mode === "extractive") {
+    for (const { test, run } of extractiveRuns) {
+      results.push(scoreGuideRun(test, run, { corpusSources, recallCase: recallById.get(test.id) ?? null }));
+    }
+  } else {
+    for (const test of suite.cases) {
+      const run = await runGuide(test.question, "model", options.k);
+      const value = run.value;
+      if (value.modelIdentity) modelIdentities.add(value.modelIdentity);
+      if ((run.code === 3 || run.code === 4) && providerUnavailableError.test(value.error || "")) {
+        const report = {
+          suite: publicSuiteName,
+          suiteFile,
+          suiteVersion: suite.version,
+          suiteSha256,
+          ...(suite.role ? { suiteRole: suite.role } : {}),
+          ...(options.summaryOnly ? { summaryOnly: true } : {}),
+          ...(disjointFrom.length ? { disjointFrom } : {}),
+          mode: options.mode,
+          availability: "unavailable",
+          reason: value.error,
+          recall: formatRecallForOutput(recall, options.summaryOnly),
+          total: suite.cases.length,
+          passed: 0,
+          failed: 0,
+          score: null,
+          ...(options.summaryOnly ? {} : { results: [] })
+        };
+        console.log(options.json ? JSON.stringify(report) : `unavailable: ${report.reason}`);
+        process.exit(2);
+      }
+      results.push(scoreGuideRun(test, run, { corpusSources, recallCase: recallById.get(test.id) ?? null }));
+    }
+  }
+
+  const summary = summarizeSuiteResults(suite.cases, results, corpusSources);
+  const subscores = {
+    abstentionPassed: results.filter((r) => r.abstentionPass).length,
+    citationSpanValid: results.filter((r) => r.citationSpanValid).length,
+    citationPassed: results.filter((r) => r.citationPass).length,
+    factPassed: results.filter((r) => r.factPass).length,
+    forbiddenPassed: results.filter((r) => r.forbiddenPass).length
+  };
+  const report = {
+    suite: publicSuiteName,
+    suiteFile,
+    suiteVersion: suite.version,
+    suiteSha256,
+    ...(suite.role ? { suiteRole: suite.role } : {}),
+    ...(options.summaryOnly ? { summaryOnly: true } : {}),
+    ...(disjointFrom.length ? { disjointFrom } : {}),
+    mode: options.mode,
+    availability: "available",
+    modelIdentity: options.mode === "model" ? [...modelIdentities] : undefined,
+    corpusHash: corpusRun.value.corpusHash ?? null,
+    recall: formatRecallForOutput(recall, options.summaryOnly),
+    total: summary.total,
+    passed: summary.passed,
+    failed: summary.failed,
+    score: summary.score,
+    failureBuckets: summary.failureBuckets,
+    forbiddenClaims: summary.forbiddenClaims,
+    subscores,
+    byCategory: summary.byCategory,
+    byLayer: summary.byLayer,
+    ...(options.summaryOnly ? {} : { results })
+  };
+  if (options.json) {
+    console.log(JSON.stringify(report));
+  } else {
+    console.log(`${summary.passed}/${summary.total} passed (${(report.score * 100).toFixed(1)}%) in ${options.mode} mode`);
+    console.log(
+      `buckets: retrieval_miss=${summary.failureBuckets.retrieval_miss} schema_error=${summary.failureBuckets.schema_error} ` +
+      `abstention_error=${summary.failureBuckets.abstention_error} citation_miss=${summary.failureBuckets.citation_miss} ` +
+      `fact_miss=${summary.failureBuckets.fact_miss} (forbiddenClaims=${summary.forbiddenClaims})`
+    );
+  }
+  process.exit(summary.passed === summary.total ? 0 : 1);
 }

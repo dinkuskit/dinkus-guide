@@ -4,24 +4,27 @@ Node 24 native ESM (`node:sqlite` built-in), with no npm runtime dependencies.
 
 ```text
 dinkus-guide corpus sync [--json]
+dinkus-guide corpus embed [--json]
 dinkus-guide corpus verify [--json]
 dinkus-guide ask QUESTION [--json] [--mode extractive|model] [--limit 12]
-dinkus-guide-eval run [--json] [--mode extractive|model|recall] [--k 12]
+dinkus-guide-eval run [--suite eval/cases.json] [--check-disjoint eval/cases.json] [--summary-only] [--json] [--mode extractive|model|retrieval|recall] [--k 12]
 ```
 
-`sync` is the only command that writes to disk (`.cache/dinkus-guide/`). It
-admits only exact manifest URLs, rejects redirects, path traversal, symlinks,
-oversized files, NUL bytes, and SHA-256 mismatches, and verifies all cached
-sources. When `DINKUS_GUIDE_EMBED_BASE_URL` is set during `corpus sync`, it also
-computes chunk embeddings via `/v1/embeddings` (`DINKUS_GUIDE_EMBED_MODEL`,
-default `qwen3-embedding`; `DINKUS_GUIDE_EMBED_API_KEY` required on non-loopback
-HTTPS and optional on loopback HTTP) and writes `.cache/dinkus-guide/embeddings.json`
-bound to the exact `corpusHash` and returned `modelIdentity`. Running `corpus sync`
-without `DINKUS_GUIDE_EMBED_BASE_URL` discards any existing `embeddings.json` so
-an operator can always recover from a stale or corrupt embedding cache into
-offline `BM25` mode. `verify` checks all source hashes and any cached
-embeddings against current chunk spans (requiring a current embeddings cache
-when `DINKUS_GUIDE_EMBED_BASE_URL` is set). `ask` never writes to disk.
+`sync` and `embed` are the only commands that write to disk
+(`.cache/dinkus-guide/`). `sync` admits only exact manifest URLs, rejects
+redirects, path traversal, symlinks, oversized files, NUL bytes, and SHA-256
+mismatches, and verifies all cached sources. When `DINKUS_GUIDE_EMBED_BASE_URL`
+is set during `corpus sync` — or when running `corpus embed` over an already
+verified local source cache — the CLI computes chunk embeddings via
+`/v1/embeddings` (`DINKUS_GUIDE_EMBED_MODEL`, default `qwen3-embedding`;
+`DINKUS_GUIDE_EMBED_API_KEY` required on non-loopback HTTPS and optional on
+loopback HTTP) and writes `.cache/dinkus-guide/embeddings.json` bound to the
+exact `corpusHash` and returned `modelIdentity`. Running `corpus sync` without
+`DINKUS_GUIDE_EMBED_BASE_URL` discards any existing `embeddings.json` so an
+operator can always recover from a stale or corrupt embedding cache into offline
+`BM25` mode. `verify` checks all source hashes and any cached embeddings against
+current chunk spans (requiring a current embeddings cache when
+`DINKUS_GUIDE_EMBED_BASE_URL` is set). `ask` never writes to disk.
 
 When `DINKUS_GUIDE_EMBED_BASE_URL` is unset, `ask` runs pure offline `FTS5`
 `BM25` retrieval with zero network requests in `extractive` mode. When
@@ -43,7 +46,16 @@ Requests enforce timeouts, bounded response sizes, and redirect refusal. Set
 Super VL no-think control. Provider errors, malformed JSON, tool calls, and
 forged citations fail honestly; there is no silent fallback.
 
+`dinkus-guide-eval run` records `suiteSha256` on every report, supports
+repeatable `--check-disjoint <suite-path>` checks to enforce zero duplicate IDs
+or normalized questions against public development suites, and supports
+`--summary-only` to omit per-case `results` and `recall.cases` (and redact
+external `--suite` file paths to `<external-suite>`) when publishing aggregate
+promotion-holdout receipts.
+
 Exit codes: `0` success, `2` usage error, `3` missing/invalid/stale corpus or
-embeddings cache, `4` model or embedding provider/output error. JSON errors go
-to stdout as a single object; human errors go to stderr. Process environment is
-the sole provider configuration; credentials are never printed.
+embeddings cache, `4` model or embedding provider/output error (`dinkus-guide-eval`
+exits `0` when all evaluated cases pass, `1` when any evaluated case fails, and
+`2` on usage or provider/corpus unavailability). JSON errors go to stdout as a
+single object; human errors go to stderr. Process environment is the sole
+provider configuration; credentials are never printed.

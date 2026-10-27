@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { answerQuestion, chunkCorpus, createOpenAICompatibleEmbedTransport, createOpenAICompatibleTransport } from "../src/guide.js";
-import { syncCorpus, verifyCorpus } from "../src/corpus.js";
+import { syncCorpus, syncCorpusEmbeddings, verifyCorpus } from "../src/corpus.js";
 
 const VERSION = "1.0.1";
 const args = process.argv.slice(2);
@@ -35,7 +35,7 @@ function parseArgs() {
 function help() {
   console.log(`DinkusGuide ${VERSION}
 Usage:
-  dinkus-guide corpus sync|verify [--json]
+  dinkus-guide corpus sync|embed|verify [--json]
   dinkus-guide ask QUESTION [--json] [--mode extractive|model] [--limit 12]`);
 }
 
@@ -89,7 +89,7 @@ try {
   if (parsed.version) { console.log(VERSION); process.exit(0); }
   if (!["extractive", "model"].includes(parsed.mode)) throw Object.assign(new Error("mode must be extractive or model"), { code: 2 });
   const positional = parsed.positional;
-  if (positional[0] === "corpus" && ["sync", "verify"].includes(positional[1])) {
+  if (positional[0] === "corpus" && ["sync", "embed", "verify"].includes(positional[1])) {
     if (positional.length !== 2 || parsed.limitSet) {
       throw Object.assign(new Error("unexpected corpus arguments"), { code: 2 });
     }
@@ -98,6 +98,13 @@ try {
       if (positional[1] === "sync") {
         const embedTransport = buildEmbedTransportFromEnv();
         result = await syncCorpus({ embedTransport, chunkCorpusImpl: chunkCorpus });
+      } else if (positional[1] === "embed") {
+        const verified = await verifyCorpus({ includeEmbeddings: false, chunkCorpusImpl: chunkCorpus });
+        const embedTransport = buildEmbedTransportFromEnv();
+        if (!embedTransport) {
+          throw Object.assign(new Error("DINKUS_GUIDE_EMBED_BASE_URL and EMBED_MODEL are required"), { code: 4 });
+        }
+        result = await syncCorpusEmbeddings(verified, { embedTransport, chunkCorpusImpl: chunkCorpus });
       } else {
         result = await verifyCorpus({ chunkCorpusImpl: chunkCorpus });
         const embedTransport = buildEmbedTransportFromEnv();
@@ -112,7 +119,7 @@ try {
     process.exit(0);
   }
   if (positional[0] !== "ask" || positional.length < 2 || !positional.slice(1).join(" ").trim()) {
-    throw Object.assign(new Error("expected ask QUESTION or corpus sync|verify"), { code: 2 });
+    throw Object.assign(new Error("expected ask QUESTION or corpus sync|embed|verify"), { code: 2 });
   }
   let corpus;
   try {

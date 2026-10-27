@@ -45,11 +45,11 @@ and indented numbered-step continuations.
 
 Worker A indexes chunks in an in-memory `node:sqlite` `FTS5` table (`porter
 unicode61`) for offline `BM25` lexical ranking. When optional dense embeddings
-(`qwen3-embedding`) are configured and synced to `.cache/dinkus-guide/embeddings.json`,
-Worker A fuses `FTS5` `BM25` ranks with cosine similarity ranks via Reciprocal
-Rank Fusion (`RRF`, $k = 60$). Two-pass diversity selection prevents the larger
-`emdash` documentation layer from crowding out `dinkuskit` or `transition`
-evidence in `E1..E12`.
+(`qwen3-embedding`) are configured and synced to `.cache/dinkus-guide/embeddings.json`
+(via `corpus sync` or `corpus embed`), Worker A fuses `FTS5` `BM25` ranks with
+cosine similarity ranks via Reciprocal Rank Fusion (`RRF`, $k = 60$). Two-pass
+diversity selection prevents the larger `emdash` documentation layer from
+crowding out `dinkuskit` or `transition` evidence in `E1..E12`.
 
 ## Synthesis and safety boundary
 
@@ -67,6 +67,10 @@ interpret source instructions, use arbitrary URLs, inspect screenshots, access
 private information, edit repositories, or send messages.
 
 `bin/dinkus-guide-eval` is separate: it spawns the public `dinkus-guide`
-executable, reports standalone `recall@k` before any model synthesis runs, and
-scores the public JSON contract. The 24 cases in `eval/cases.json` remain frozen
-at `corrected-public-development-v3` for Rung 1 comparability.
+executable, evaluates `eval/cases.json` (75-case public development suite) or an
+external unseen promotion holdout via `--suite` (`--check-disjoint
+eval/cases.json --summary-only`, off-limits to Rung 3 optimizers and Rung 4 LoRA
+data generators), verifies cited line spans directly against cached on-disk
+source snapshots, and classifies failures into five diagnostic buckets
+(`retrieval_miss`, `schema_error`, `abstention_error`, `citation_miss`,
+`fact_miss`).

@@ -532,8 +532,10 @@ test("CLI argument-parsing failures preserve JSON error output on stdout", async
     [guideCli, ["ask", "   ", "--json"], /expected ask QUESTION/],
     [evalCli, ["--json"], /expected command: run/],
     [evalCli, ["run", "--json", "--bogus"], /unknown option: --bogus/],
-    [evalCli, ["run", "--json", "--mode", "invalid"], /mode must be extractive, model, or recall/],
-    [evalCli, ["run", "--json", "--k", "0"], /k must be an integer between 1 and 50/]
+    [evalCli, ["run", "--json", "--mode", "invalid"], /mode must be extractive, model, retrieval, or recall/],
+    [evalCli, ["run", "--json", "--k", "0"], /k must be an integer between 1 and 50/],
+    [evalCli, ["run", "--json", "--suite"], /missing or duplicate --suite/],
+    [evalCli, ["run", "--json", "--suite", "eval/cases.json", "--suite", "eval/holdout.json"], /missing or duplicate --suite/]
   ];
   for (const [binPath, cliArgs, expectedError] of cases) {
     const result = await new Promise((resolve) => {

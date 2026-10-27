@@ -17,27 +17,53 @@ Requires Node 24.
 npm test
 npm run verify
 ./bin/dinkus-guide corpus sync
+./bin/dinkus-guide corpus embed --json   # optional when DINKUS_GUIDE_EMBED_BASE_URL is set
 ./bin/dinkus-guide corpus verify --json
 ./bin/dinkus-guide ask "How do I set up the template store?"
-./bin/dinkus-guide-eval run --mode recall --json
+./bin/dinkus-guide-eval run --mode retrieval --json
 ./bin/dinkus-guide-eval run --json
+./bin/dinkus-guide-eval run --suite "$DINKUS_GUIDE_HOLDOUT_SUITE" --check-disjoint eval/cases.json --summary-only --json
 ```
 
-`corpus sync` is an explicit operator action. Asking a question is read-only.
-Retrieval uses in-memory `node:sqlite` `FTS5` (`BM25`) by default and fuses
-dense vector similarity (`qwen3-embedding`) via Reciprocal Rank Fusion (`RRF`)
-when `DINKUS_GUIDE_EMBED_BASE_URL` is configured. Extractive mode returns
-layer-balanced passages and immutable line citations. Model mode is bounded and
-action-free; see [docs/cli.md](docs/cli.md). The `nemotron-3.5-lightning` model
-alias is retired; the default model identity is `nemotron-3.5-super-vl`.
+`corpus sync` and `corpus embed` are explicit operator actions. Asking a
+question is read-only. Retrieval uses in-memory `node:sqlite` `FTS5` (`BM25`) by
+default and fuses dense vector similarity (`qwen3-embedding`) via Reciprocal
+Rank Fusion (`RRF`) when `DINKUS_GUIDE_EMBED_BASE_URL` is configured. Extractive
+mode returns layer-balanced passages and immutable line citations. Model mode is
+bounded and action-free; see [docs/cli.md](docs/cli.md). The
+`nemotron-3.5-lightning` model alias is retired; the default model identity is
+`nemotron-3.5-super-vl`.
+
+## Development vs. Isolated Holdout Evaluation Split
+
+- **Public development suite (`eval/cases.json`, `dinkus-guide-dev-v4`)**: 75
+  realistic multi-fact developer and operator questions across all 7 approved
+  product/API repositories and 6 diagnostic categories (`lookup`, `workflow`,
+  `transition_trap`, `cross_plugin`, `honest_abstention`, `boundary_refusal`).
+  `npm test` and `npm run verify` validate `eval/cases.json` without requiring
+  access to any holdout file and refuse any holdout suite placed inside `eval/`.
+- **External locked promotion exam (`role: "locked_promotion_exam"`, 25–30 unseen
+  cases)**: Stored outside the public repository in owner-only storage
+  unavailable to optimization workers (including via network access), stratified
+  across the same 6 categories and 7 product/API repositories, and evaluated via `--suite`
+  with `--check-disjoint eval/cases.json --summary-only` so public baseline
+  proofs record cryptographic `suiteSha256` and aggregate failure buckets
+  (redacting external suite labels and paths to `<external-suite>`) without
+  leaking unseen questions, case IDs, suite labels, or gold expectations. **Strict
+  holdout boundary:** Rung 3 prompt/harness optimizers and Rung 4 LoRA training
+  data generators are strictly forbidden from mounting, reading, indexing, or
+  tuning against any external holdout suite.
 
 See [docs/architecture.md](docs/architecture.md) and
 [docs/evaluation.md](docs/evaluation.md) for boundaries, corpus admission rules,
-and baseline scoring. The package and its original code are MIT; third-party
-source provenance and licenses are recorded per manifest entry and are not
-redistributed in git.
+citation-span verification, and failure-bucket scoring. The package and its
+original code are MIT; third-party source provenance and licenses are recorded
+per manifest entry and are not redistributed in git.
 
-Measured development baselines and known limits are in
+Measured `Dev` and aggregate `Holdout` baselines and failure-bucket breakdowns
+are in
+[proof/rung2-eval-grader-20261026/PROOF.md](proof/rung2-eval-grader-20261026/PROOF.md)
+(building on the Rung 1 hybrid corpus expansion in
 [proof/rung1-hybrid-20261026/PROOF.md](proof/rung1-hybrid-20261026/PROOF.md)
-(superseding the initial 15-doc baseline in
+and initial 15-doc baseline in
 [proof/initial-guide-20261025/PROOF.md](proof/initial-guide-20261025/PROOF.md)).
