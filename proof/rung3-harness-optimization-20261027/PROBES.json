@@ -1,0 +1,206 @@
+{
+  "experimentId": "dinkus-guide-rung3-pretraining-probes-20261027",
+  "baseSha": "af7038971ade6f3d7d55a0dd8e5e4fc3c1dd24d9",
+  "composedImplementationSha": "31a9f003f73714eb3b6ed5e1726f51ca8394accd",
+  "corpusHash": "2bc34f2be1c0d91d2e5ee2a1acf5ba466e67ae11bdfe379214107b45d32835b2",
+  "sources": 164,
+  "chunks": 2154,
+  "devSuite": {
+    "suite": "dinkus-guide-dev-v4",
+    "suiteFile": "eval/cases.json",
+    "suiteSha256": "55a15780dba0c88f5df5a7ed5c50d304494443ce3f9095cd9db93a42e29d83d6",
+    "cases": 75,
+    "eligibleCitationCases": 56
+  },
+  "holdoutIsolation": "Zero holdout reads, copies, or tuning during Stage A or Stage B probing; all single-variable probes and Propose-Probe-Compose selection used only public eval/cases.json.",
+  "consumer": "Local OpenAI-compatible loopback endpoints for qwen3-embedding (4096 dims) and nemotron-3.5-super-vl (temperature=0, max_tokens=1024, DINKUS_GUIDE_NO_THINK=1).",
+  "rung2DevBaseline": {
+    "retrievalBm25": { "passed": 34, "total": 56, "score": 0.6071428571428571, "sourceHits": 55, "spanHits": 34 },
+    "extractiveBm25": { "passed": 46, "total": 75, "score": 0.6133333333333333, "failureBuckets": { "retrieval_miss": 1, "schema_error": 0, "abstention_error": 7, "citation_miss": 0, "fact_miss": 21 }, "forbiddenClaims": 0 },
+    "retrievalHybrid": { "passed": 33, "total": 56, "score": 0.5892857142857143, "sourceHits": 56, "spanHits": 33 },
+    "extractiveHybrid": { "passed": 47, "total": 75, "score": 0.6266666666666667, "failureBuckets": { "retrieval_miss": 0, "schema_error": 0, "abstention_error": 5, "citation_miss": 0, "fact_miss": 23 }, "forbiddenClaims": 0 },
+    "modelHybrid": {
+      "passed": 40,
+      "total": 75,
+      "score": 0.5333333333333333,
+      "sourceHits": 56,
+      "spanHits": 33,
+      "failureBuckets": { "retrieval_miss": 0, "schema_error": 8, "abstention_error": 4, "citation_miss": 2, "fact_miss": 21 },
+      "forbiddenClaims": 2,
+      "byCategory": {
+        "lookup": "9/18",
+        "workflow": "5/15",
+        "transition_trap": "6/10",
+        "cross_plugin": "6/13",
+        "honest_abstention": "5/10",
+        "boundary_refusal": "9/9"
+      }
+    }
+  },
+  "stageAProbes": [
+    {
+      "id": "Probe-A1",
+      "surface": "src/guide.js (buildGuideResponseFormat + createOpenAICompatibleTransport)",
+      "targetBottleneck": "schema_error = 8 on Dev model baseline (unescaped double quotes closing JSON string early + invalid/empty citationIds)",
+      "change": "Attach strict OpenAI-compatible response_format json_schema (anyOf separating status=answered minItems:1 over E1..Ek from status=insufficient_evidence maxItems:0, single-line quote-free terminal-punctuation answer pattern, HTTP 400 fallback for non-schema mocks, and transport cross-field normalization).",
+      "devModel": {
+        "passed": 41,
+        "total": 75,
+        "score": 0.5466666666666666,
+        "failureBuckets": { "retrieval_miss": 0, "schema_error": 0, "abstention_error": 10, "citation_miss": 2, "fact_miss": 22 },
+        "forbiddenClaims": 2,
+        "byCategory": {
+          "lookup": "9/18",
+          "workflow": "6/15",
+          "transition_trap": "6/10",
+          "cross_plugin": "6/13",
+          "honest_abstention": "5/10",
+          "boundary_refusal": "9/9"
+        }
+      },
+      "decision": "keep",
+      "rationale": "Eliminated schema_error from 8 to 0 on Dev; exposed downstream abstention/span misses cleanly without malformed JSON masking them."
+    },
+    {
+      "id": "Probe-A2",
+      "surface": "src/guide.js (expandChunkWindow, coalesceAdjacentWindows, Pass-1/Pass-2 multi-section rankEvidence, refusalOrUnsupported)",
+      "targetBottleneck": "Span-fact recall@12 = 33/56 (58.9%) despite 56/56 (100.0%) sourceRecall@12, plus ungrounded proper-entity / guide self-mutation abstentions",
+      "change": "Keep chunkCorpus keys frozen for embedding-cache compatibility; expand seed chunks into bounded contiguous GitHub line windows, coalesce adjacent windows per source, cap Pass-1 distinct sources at 9 (for k=12) so Pass-2 selects complementary query-term sections from matched long specs while keeping EmDash layer cap <= 6, and abstain on ungrounded proper-entity / guide self-mutation queries.",
+      "devRetrievalBm25": { "passed": 53, "total": 56, "score": 0.9464285714285714, "sourceHits": 56, "spanHits": 53 },
+      "devExtractiveBm25": { "passed": 71, "total": 75, "score": 0.9466666666666667, "failureBuckets": { "retrieval_miss": 0, "schema_error": 0, "abstention_error": 1, "citation_miss": 0, "fact_miss": 3 } },
+      "devRetrievalHybrid": { "passed": 53, "total": 56, "score": 0.9464285714285714, "sourceHits": 56, "spanHits": 53 },
+      "devExtractiveHybrid": { "passed": 71, "total": 75, "score": 0.9466666666666667, "failureBuckets": { "retrieval_miss": 0, "schema_error": 0, "abstention_error": 1, "citation_miss": 0, "fact_miss": 3 } },
+      "devModel": {
+        "passed": 63,
+        "total": 75,
+        "score": 0.84,
+        "failureBuckets": { "retrieval_miss": 0, "schema_error": 0, "abstention_error": 1, "citation_miss": 2, "fact_miss": 9 },
+        "forbiddenClaims": 2,
+        "byCategory": {
+          "lookup": "16/18",
+          "workflow": "14/15",
+          "transition_trap": "7/10",
+          "cross_plugin": "8/13",
+          "honest_abstention": "9/10",
+          "boundary_refusal": "9/9"
+        }
+      },
+      "decision": "keep",
+      "rationale": "Lifted hybrid span-fact recall@12 from 33/56 (58.9%) to 53/56 (94.6%) while preserving 56/56 (100.0%) sourceRecall@12, extractive from 47/75 (62.7%) to 71/75 (94.7%), and live model from 41/75 (54.7%) to 63/75 (84.0%)."
+    }
+  ],
+  "stageBProposeProbeCompose": {
+    "referenceStageA": {
+      "passed": 63,
+      "total": 75,
+      "score": 0.84,
+      "failureBuckets": { "retrieval_miss": 0, "schema_error": 0, "abstention_error": 1, "citation_miss": 2, "fact_miss": 9 },
+      "forbiddenClaims": 2
+    },
+    "candidates": [
+      {
+        "id": "Candidate-P1",
+        "name": "Compact AgentHints per evidence block + multi-source citation instruction",
+        "devModel": {
+          "passed": 64,
+          "total": 75,
+          "score": 0.8533333333333334,
+          "failureBuckets": { "retrieval_miss": 0, "schema_error": 1, "abstention_error": 1, "citation_miss": 2, "fact_miss": 7 },
+          "forbiddenClaims": 2,
+          "byCategory": {
+            "lookup": "17/18",
+            "workflow": "13/15",
+            "transition_trap": "7/10",
+            "cross_plugin": "9/13",
+            "honest_abstention": "9/10",
+            "boundary_refusal": "9/9"
+          }
+        },
+        "decision": "keep_with_conciseness_guard",
+        "rationale": "Reduced fact_miss from 9 to 7 and improved lookup (17/18) and cross_plugin (9/13); 1 workflow answer exceeded 1024 tokens without an explicit sentence/word conciseness bound."
+      },
+      {
+        "id": "Candidate-P2",
+        "name": "Canonical abstention template & explicit answer-vs-abstain threshold",
+        "devModel": {
+          "passed": 64,
+          "total": 75,
+          "score": 0.8533333333333334,
+          "failureBuckets": { "retrieval_miss": 0, "schema_error": 0, "abstention_error": 0, "citation_miss": 3, "fact_miss": 8 },
+          "forbiddenClaims": 2,
+          "byCategory": {
+            "lookup": "16/18",
+            "workflow": "14/15",
+            "transition_trap": "7/10",
+            "cross_plugin": "8/13",
+            "honest_abstention": "10/10",
+            "boundary_refusal": "9/9"
+          }
+        },
+        "decision": "keep",
+        "rationale": "Eliminated abstention_error to 0 (75/75 abstentionPassed; 10/10 honest_abstention and 9/9 boundary_refusal) with zero schema_error."
+      },
+      {
+        "id": "Candidate-P3",
+        "name": "Transition-trap positive steering (v1 generic-phrasing rule)",
+        "devModel": {
+          "passed": 62,
+          "total": 75,
+          "score": 0.8266666666666667,
+          "failureBuckets": { "retrieval_miss": 0, "schema_error": 0, "abstention_error": 1, "citation_miss": 3, "fact_miss": 9 },
+          "forbiddenClaims": 2,
+          "byCategory": {
+            "lookup": "16/18",
+            "workflow": "14/15",
+            "transition_trap": "7/10",
+            "cross_plugin": "7/13",
+            "honest_abstention": "9/10",
+            "boundary_refusal": "9/9"
+          }
+        },
+        "decision": "refine_for_compose",
+        "rationale": "Diagnostic trace showed Worker B still repeated literal '@dinkuskit/blocks' because active pairing/provenance docs contain negated mentions ('no @dinkuskit/blocks dependency'). Refined in Compose to forbid repeating retired/archived package or bridge identifiers even inside negated clauses copied from active docs."
+      }
+    ],
+    "composed": {
+      "id": "Compose-P1-P2-P3-Conciseness",
+      "devModel": {
+        "passed": 66,
+        "total": 75,
+        "score": 0.88,
+        "failureBuckets": { "retrieval_miss": 0, "schema_error": 0, "abstention_error": 0, "citation_miss": 2, "fact_miss": 7 },
+        "forbiddenClaims": 0,
+        "subscores": {
+          "abstentionPassed": 75,
+          "citationSpanValid": 75,
+          "citationPassed": 70,
+          "factPassed": 68,
+          "forbiddenPassed": 75
+        },
+        "byCategory": {
+          "lookup": "16/18",
+          "workflow": "14/15",
+          "transition_trap": "9/10",
+          "cross_plugin": "8/13",
+          "honest_abstention": "10/10",
+          "boundary_refusal": "9/9"
+        }
+      },
+      "decision": "keep"
+    },
+    "comparativeAdjudication": {
+      "protocol": "blinded-sanitized-fixed-suite-75-cases-temperature-0",
+      "jev": {
+        "status": "unavailable",
+        "reason": "Native MCP server spawn lacked node in non-shell PATH and local route resolves to paid hosted endpoint gated by AGENTS.md line 59 (no paid model calls follow from a code assignment)."
+      },
+      "independentManualFallback": {
+        "judge": "manual (independent blinded read-only evaluator receiving only anonymized A/B summary metrics and 4 fixed choice criteria without original/candidate labels)",
+        "blindedVerdict": "B-better",
+        "mappedDecision": "candidate-better",
+        "status": "keep",
+        "rationale": "Composed candidate improved Dev pass rate from 63/75 (84.0%) to 66/75 (88.0%), reduced abstention_error from 1 to 0 (75/75 abstentionPassed; 19/19 abstention cases), and eliminated forbiddenClaims from 2 to 0 (transition_trap 7/10 -> 9/10) without regressing schema_error (0), citationSpanValid (75/75), or retrieval recall (53/56 span-fact, 56/56 source)."
+      }
+    }
+  }
+}
