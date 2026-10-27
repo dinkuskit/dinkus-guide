@@ -8,7 +8,7 @@ testing across two disjoint v4 suites:
   repositories. Ordinary verification (`npm test` and `npm run verify`) checks
   `eval/cases.json` without requiring holdout access and fails closed if any
   holdout or extra suite JSON is placed under `eval/`.
-- **External locked promotion exam (`dinkus-guide-holdout-v4`, `role: "locked_promotion_exam"`)**:
+- **External locked promotion exam (`role: "locked_promotion_exam"`)**:
   25–30 unseen cases stored outside the public repository in owner-controlled
   storage unavailable to optimization workers (including through network
   access), stratified across the exact same 6 categories and 7 product/API repositories.
@@ -19,9 +19,10 @@ testing across two disjoint v4 suites:
   explicit Rung 3 / Rung 4 policy metadata for `role: "locked_promotion_exam"`,
   `--check-disjoint eval/cases.json` enforces zero duplicate case IDs or
   normalized question strings, and `--summary-only` emits aggregate scores,
-  buckets, and `suiteSha256` while redacting case-derived diagnostics on both
-  successful and failed runs so unseen case IDs, questions, suite labels, and
-  gold expectations never appear on stdout or stderr.
+  buckets, and `suiteSha256` while redacting external `suite` and `suiteFile`
+  identifiers to `<external-suite>` and redacting case-derived diagnostics on
+  both successful and failed runs so unseen case IDs, questions, suite labels,
+  and gold expectations never appear on stdout or stderr.
 
 ## Question categories & core guardrails
 
@@ -92,8 +93,9 @@ imports ranking or answer functions from `src/`.
    - `abstention_error` — False abstention (`insufficient_evidence` on an
      answerable case), false answer (`answered` on an `abstain: true` case), or
      an unconstrained `abstain: true` answer body that omits explicit
-     refusal/insufficient-evidence cues or leaks substantive, procedural, URL,
-     code, pricing, or secret-like content (`verifyAbstentionAnswer`).
+     sentence- and clause-level refusal/scope-limitation cues or introduces
+     ungrounded, substantive, procedural, address/PII, URL, code, pricing, or
+     secret-like content (`verifyAbstentionAnswer`).
    - `citation_miss` — Returned citations had an invalid or out-of-bounds line
      span, or missed a required `sources` / `anyOfSources` group after facts
      passed.

@@ -42,13 +42,14 @@ bounded and action-free; see [docs/cli.md](docs/cli.md). The
   `transition_trap`, `cross_plugin`, `honest_abstention`, `boundary_refusal`).
   `npm test` and `npm run verify` validate `eval/cases.json` without requiring
   access to any holdout file and refuse any holdout suite placed inside `eval/`.
-- **External locked promotion exam (`dinkus-guide-holdout-v4`, 25–30 unseen
+- **External locked promotion exam (`role: "locked_promotion_exam"`, 25–30 unseen
   cases)**: Stored outside the public repository in owner-only storage
   unavailable to optimization workers (including via network access), stratified
   across the same 6 categories and 7 product/API repositories, and evaluated via `--suite`
   with `--check-disjoint eval/cases.json --summary-only` so public baseline
   proofs record cryptographic `suiteSha256` and aggregate failure buckets
-  without leaking unseen questions, case IDs, or gold expectations. **Strict
+  (redacting external suite labels and paths to `<external-suite>`) without
+  leaking unseen questions, case IDs, suite labels, or gold expectations. **Strict
   holdout boundary:** Rung 3 prompt/harness optimizers and Rung 4 LoRA training
   data generators are strictly forbidden from mounting, reading, indexing, or
   tuning against any external holdout suite.

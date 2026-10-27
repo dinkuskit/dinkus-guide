@@ -443,13 +443,85 @@ export function verifyCitationSpan(citation, corpusSources = null) {
   };
 }
 
-const ABSTENTION_REFUSAL_CUE_RE = /\b(?:cannot|can't|unable\s+to|read-only|text-only|does\s+not\s+(?:contain|include|document|provide|cover|support|specify|describe|mention|have|allow|perform|access|inspect|store|expose)|do\s+not\s+(?:contain|include|document|provide|cover|support|specify|describe|mention|have|allow|perform|access|inspect|store|expose)|not\s+(?:documented|supported|present|provided|available|mentioned|covered|included|built|specified|found|permitted|allowed|able)|no\s+(?:documented|documentation|evidence|information|support|record|mention|details|instructions)|insufficient\s+evidence|unverified|unsupported|outside\s+the\s+pinned|refuse[sd]?)\b/i;
+const ABSTENTION_REFUSAL_CUE_RE = /\b(?:cannot|can't|unable\s+to|read-only|text-only|does\s+not\s+(?:contain|include|document|provide|cover|support|specify|describe|mention|have|allow|perform|access|inspect|store|expose)|do\s+not\s+(?:contain|include|document|provide|cover|support|specify|describe|mention|have|allow|perform|access|inspect|store|expose)|not\s+(?:yet\s+|currently\s+)?(?:documented|supported|present|provided|available|mentioned|covered|included|built|implemented|specified|found|permitted|allowed|able)|no\s+(?:documented|documentation|evidence|information|support|record|mention|details|instructions)|insufficient\s+evidence|unverified|unsupported|undocumented|unbuilt|undecided|out\s+of\s+scope|outside\s+the\s+pinned|refuse[sd]?)\b/i;
 
-const ABSTENTION_SENTENCE_CUE_RE = /\b(?:cannot|can't|unable\s+to|read-only|text-only|does\s+not|do\s+not|is\s+not|are\s+not|not\s+(?:documented|supported|present|provided|available|mentioned|covered|included|built|specified|found|permitted|allowed|able)|no\s+(?:documented|documentation|evidence|information|support|record|mention|details|instructions)|insufficient\s+evidence|unverified|unsupported|outside\s+the\s+pinned|refuse[sd]?|only\s+(?:covers?|documents?|describes?|supports?|mentions?|addresses?|applies|includes?))\b|^provide\s+a\s+documented\s+text\s+contract\s+or\s+consult\s+the\s+pinned\s+(?:public\s+)?sources\.?$/i;
+const ABSTENTION_CLAUSE_CUE_RE = /\b(?:cannot|can't|unable\s+to|read-only|text-only|does\s+not|do\s+not|is\s+not|are\s+not|not\s+(?:yet\s+|currently\s+)?(?:documented|supported|present|provided|available|mentioned|covered|included|built|implemented|specified|found|permitted|allowed|able)|no\s+(?:documented|documentation|evidence|information|support|record|mention|details|instructions|public)|insufficient\s+evidence|unverified|unsupported|undocumented|unbuilt|undecided|out\s+of\s+scope|target\s+direction|open\s+decision|outside\s+the\s+pinned|refuse[sd]?|only\s+(?:covers?|documents?|describes?|supports?|mentions?|addresses?|applies|includes?))\b|^provide\s+a\s+documented\s+text\s+contract\s+or\s+consult\s+the\s+pinned\s+(?:public\s+)?sources\.?$/i;
 
-const ABSTENTION_DISALLOWED_CONTENT_RE = /```|https?:\/\/|(?:^|\n)\s*(?:[-*]\s+|\d+[.)]\s+|step\s+\d+\b)|\$\s*\d+|\b[A-Z][A-Z0-9_]{2,}\s*=|\b(?:wrangler|pnpm|npm|npx|curl|git)\s+(?:deploy|secret|push|commit|install|add|exec|run)\b|\b(?:however|nevertheless|meanwhile|typically\s+you|workaround|try\s+running|here\s+(?:is|are)\s+(?:how|the|your|a\s+sample))\b|\b(?:i\s+(?:have\s+)?(?:deployed|edited|created|deleted|exported|updated|executed|inspected|retrieved)|order\s+#\d+|sk_(?:live|test)_[A-Za-z0-9_]*|whsec_[A-Za-z0-9_]*|ec_pat_[A-Za-z0-9_]*|dk_store_[A-Za-z0-9_]*|Bearer\s+[A-Za-z0-9._-]{6,})\b/i;
+const ABSTENTION_CLAUSE_SPLIT_RE = /[;:—–]|\s--\s|\b(?:but|however|although|though|nevertheless|meanwhile|whereas|while)\b|,\s*yet\b|,\s*instead\b|\binstead\s*,|,\s*except\b|\bexcept\s+that\b|,\s*(?:(?:and|or|so|for|nor)\s+)?(?=[^,.!?]*\b(?:is|are|was|were|be|been|has|have|had|does|do|did|can|could|will|would|should|may|might|must|lives?|works?|uses?|runs?|stores?|supports?|includes?|contains?|provides?|allows?|requires?|enables?|connects?|ships?|charges?|holds?|owes?|paid|bought|ordered|resides?)\b)/i;
 
-export function verifyAbstentionAnswer(answer) {
+const ABSTENTION_DISALLOWED_CONTENT_RE = /```|https?:\/\/|(?:^|\n)\s*(?:[-*]\s+|\d+[.)]\s+|step\s+\d+\b)|\$\s*\d+|\b[A-Z][A-Z0-9_]{2,}\s*=|\b(?:wrangler|pnpm|npm|npx|curl|git)\s+(?:deploy|secret|push|commit|install|add|exec|run)\b|\b(?:typically\s+you|workaround|try\s+running|here\s+(?:is|are)\s+(?:how|the|your|a\s+sample))\b|\b(?:i\s+(?:have\s+)?(?:deployed|edited|created|deleted|exported|updated|executed|inspected|retrieved)|order\s+#\d+|sk_(?:live|test)_[A-Za-z0-9_]*|whsec_[A-Za-z0-9_]*|ec_pat_[A-Za-z0-9_]*|dk_store_[A-Za-z0-9_]*|Bearer\s+[A-Za-z0-9._-]{6,})\b|\b\d+\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?\s+(?:St(?:reet)?|Ave(?:nue)?|Rd|Road|Blvd|Boulevard|Dr(?:ive)?|Ln|Lane|Way|Ct|Court|Pl(?:ace)?)\b|\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b|\b\d{3}-\d{2}-\d{4}\b/i;
+
+const ALLOWED_ABSTENTION_TOKENS = new Set([
+  "a", "an", "the", "this", "that", "these", "those", "it", "its", "they", "their", "them", "there", "here",
+  "which", "what", "whether", "how", "when", "where", "why", "who",
+  "is", "are", "was", "were", "be", "been", "being", "am", "has", "have", "had", "do", "does", "did",
+  "can", "cannot", "cant", "t", "s", "could", "will", "would", "should", "may", "might", "must",
+  "not", "no", "none", "nor", "neither", "never", "nothing", "without", "lack", "lacks", "lacking", "missing", "absent", "unavailable", "unknown",
+  "in", "on", "at", "to", "for", "of", "from", "by", "with", "within", "into", "onto", "about", "across", "against",
+  "among", "around", "as", "before", "after", "between", "beyond", "during", "over", "through", "under", "until", "up", "out", "outside",
+  "and", "or", "but", "so", "yet", "if", "unless", "while", "whereas", "although", "though", "because", "since",
+  "than", "then", "therefore", "thus", "instead", "except",
+  "only", "solely", "strictly", "exclusively", "merely", "just", "also", "either", "any", "all", "both", "each",
+  "other", "another", "such", "same", "specific", "specifically", "explicit", "explicitly", "direct", "directly",
+  "current", "currently", "present", "presently", "still", "already",
+  "dinkusguide", "dinkus", "guide", "dinkuskit", "emdash", "v1", "version", "versions",
+  "read", "text", "write", "mutable", "mutation", "mutations", "modify", "modifying", "change", "changes",
+  "perform", "performing", "execute", "executing", "execution", "run", "running", "action", "actions", "operation", "operations", "tool", "tools",
+  "unable", "able", "refuse", "refuses", "refused", "refusal", "permitted", "allowed", "allow", "allows",
+  "forbid", "forbids", "forbidden", "prohibited", "restricted", "blocked",
+  "insufficient", "enough", "sufficient", "adequate", "unverified", "verified", "unsupported", "supported", "support", "supports",
+  "undocumented", "documented", "document", "documents", "documentation", "docs", "doc",
+  "unbuilt", "built", "implemented", "implement", "implements", "implementation", "unimplemented",
+  "undecided", "decided", "decision", "decisions", "open", "planned", "plan", "target", "direction", "directions", "future", "roadmap", "scope", "scoped",
+  "evidence", "corpus", "pinned", "public", "source", "sources", "file", "files", "excerpt", "excerpts", "passage", "passages",
+  "context", "reference", "references", "charter", "charters", "readme", "manifest", "contract", "contracts", "guidance", "material", "materials",
+  "contain", "contains", "contained", "include", "includes", "included", "provide", "provides", "provided",
+  "cover", "covers", "covered", "describe", "describes", "described", "mention", "mentions", "mentioned",
+  "specify", "specifies", "specified", "state", "states", "stated", "define", "defines", "defined",
+  "address", "addresses", "addressed", "discuss", "discusses", "discussed", "detail", "details", "detailed",
+  "explain", "explains", "explained", "indicate", "indicates", "indicated", "show", "shows", "shown",
+  "confirm", "confirms", "verify", "prove", "consult", "inspect", "inspecting", "view", "viewing",
+  "access", "accessing", "retrieve", "retrieved", "available", "found", "find",
+  "answer", "answering", "question", "questions", "request", "requested", "query", "asked", "topic", "information", "info", "data", "record", "records",
+  "private", "internal", "external", "third", "party", "live", "production", "store", "stores", "storage",
+  "merchant", "merchants", "customer", "customers", "buyer", "buyers", "tenant", "tenants", "account", "accounts",
+  "order", "orders", "history", "database", "export", "delete", "deploy", "deployment", "worker", "workers", "cloudflare",
+  "repository", "repositories", "repo", "branch", "pr", "pull", "commit", "checkout", "button",
+  "screenshot", "screenshots", "image", "images", "visual", "ui",
+  "feature", "features", "capability", "capabilities", "functionality", "integration", "integrations",
+  "connector", "connectors", "adapter", "adapters", "bridge", "sync", "synchronization", "cutover", "manual", "automated", "automatic",
+  "configuration", "configure", "configuring", "config", "setting", "settings", "setup", "step", "steps", "instruction", "instructions", "workflow", "workflows",
+  "api", "apis", "cli", "command", "commands", "endpoint", "endpoints", "plugin", "plugins", "package", "packages",
+  "module", "modules", "service", "services", "system", "systems", "model", "models", "rule", "rules", "policy", "policies", "boundary", "boundaries"
+]);
+
+function tokenizeWords(text) {
+  return String(text ?? "").toLowerCase().match(/[a-z0-9]+/g) ?? [];
+}
+
+function buildGroundedAbstentionTokens({ question = "", category = null, forbiddenFacts = [], evidence = [] } = {}) {
+  const allowed = new Set(ALLOWED_ABSTENTION_TOKENS);
+  const forbiddenTokens = new Set(forbiddenFacts.flatMap((fact) => tokenizeWords(fact)));
+  if (category !== "boundary_refusal") {
+    for (const token of tokenizeWords(question)) {
+      if (!forbiddenTokens.has(token) && !/^\d{2,}$/.test(token)) {
+        allowed.add(token);
+      }
+    }
+    if (Array.isArray(evidence)) {
+      for (const item of evidence) {
+        for (const token of tokenizeWords(`${item?.sourceId ?? ""} ${item?.excerpt ?? ""}`)) {
+          if (!forbiddenTokens.has(token) && !/^\d{2,}$/.test(token)) {
+            allowed.add(token);
+          }
+        }
+      }
+    }
+  }
+  return allowed;
+}
+
+export function verifyAbstentionAnswer(answer, context = {}) {
   if (typeof answer !== "string") {
     return { valid: false, reason: "missing_abstention_answer" };
   }
@@ -473,8 +545,23 @@ export function verifyAbstentionAnswer(answer) {
   if (!sentences.length || sentences.length > 3) {
     return { valid: false, reason: "excessive_abstention_sentences" };
   }
-  if (sentences.some((sentence) => !ABSTENTION_SENTENCE_CUE_RE.test(sentence))) {
-    return { valid: false, reason: "unconstrained_abstention_sentence" };
+  for (const sentence of sentences) {
+    if (!ABSTENTION_CLAUSE_CUE_RE.test(sentence)) {
+      return { valid: false, reason: "unconstrained_abstention_sentence" };
+    }
+    const clauses = sentence
+      .split(ABSTENTION_CLAUSE_SPLIT_RE)
+      .map((clause) => clause.trim())
+      .filter(Boolean);
+    if (clauses.some((clause) => !ABSTENTION_CLAUSE_CUE_RE.test(clause))) {
+      return { valid: false, reason: "unconstrained_abstention_clause" };
+    }
+  }
+  const allowedTokens = buildGroundedAbstentionTokens(context);
+  for (const token of tokenizeWords(trimmed)) {
+    if (!allowedTokens.has(token)) {
+      return { valid: false, reason: "ungrounded_abstention_content" };
+    }
   }
   return { valid: true, reason: null };
 }
@@ -536,7 +623,12 @@ export function scoreGuideRun(test, run, { corpusSources = null, recallCase = nu
   const expectedStatus = test.expectedStatus ?? (test.abstain ? "insufficient_evidence" : "answered");
   const exitPass = run?.code === 0 && value.status !== "error";
   const abstentionAnswerCheck = test.abstain
-    ? verifyAbstentionAnswer(rawAnswer)
+    ? verifyAbstentionAnswer(rawAnswer, {
+      question: test.question,
+      category: test.category ?? null,
+      forbiddenFacts: forbiddenList,
+      evidence: value.evidence ?? []
+    })
     : { valid: true, reason: null };
   const abstentionAnswerValid = abstentionAnswerCheck.valid;
   const abstentionPass = exitPass && value.status === expectedStatus && abstentionAnswerValid;
@@ -702,6 +794,9 @@ if (isMainModule()) {
   } catch (error) {
     failUsage(`invalid suite (${suiteFile}): ${error.message}`);
   }
+  const publicSuiteName = options.summaryOnly && suiteFile === "<external-suite>"
+    ? "<external-suite>"
+    : suite.suite;
 
   const disjointFrom = [];
   for (const rawRef of options.checkDisjoint) {
@@ -717,13 +812,16 @@ if (isMainModule()) {
       let parsedRef;
       try { parsedRef = JSON.parse(rawRefText); } catch { throw new Error("suite is not valid JSON"); }
       const refSuite = validateSuite(parsedRef, { redactCaseDetails: options.summaryOnly });
+      const publicRefSuiteName = options.summaryOnly && refLabel === "<external-suite>"
+        ? "<external-suite>"
+        : refSuite.suite;
       assertSuitesDisjoint(suite, refSuite, {
-        primaryLabel: suite.suite,
-        referenceLabel: refSuite.suite,
+        primaryLabel: publicSuiteName,
+        referenceLabel: publicRefSuiteName,
         redactCaseDetails: options.summaryOnly
       });
       disjointFrom.push({
-        suite: options.summaryOnly && refLabel === "<external-suite>" ? "<external-suite>" : refSuite.suite,
+        suite: publicRefSuiteName,
         suiteFile: refLabel,
         suiteSha256: sha256Text(rawRefText),
         cases: refSuite.cases.length
@@ -739,7 +837,7 @@ if (isMainModule()) {
       ? (corpusRun.value.error || "corpus verification failed")
       : (corpusRun.value.error || corpusRun.stderr);
     const report = {
-      suite: suite.suite,
+      suite: publicSuiteName,
       suiteFile,
       suiteVersion: suite.version,
       suiteSha256,
@@ -778,7 +876,7 @@ if (isMainModule()) {
     const run = await runGuide(test.question, "extractive", options.k);
     if ((run.code === 3 || run.code === 4) && providerUnavailableError.test(run.value.error || "")) {
       const report = {
-        suite: suite.suite,
+        suite: publicSuiteName,
         suiteFile,
         suiteVersion: suite.version,
         suiteSha256,
@@ -825,7 +923,7 @@ if (isMainModule()) {
     const answerableCases = suite.cases.filter((item) => !item.abstain);
     const summary = summarizeSuiteResults(answerableCases, recallCases, corpusSources);
     const report = {
-      suite: suite.suite,
+      suite: publicSuiteName,
       suiteFile,
       suiteVersion: suite.version,
       suiteSha256,
@@ -864,7 +962,7 @@ if (isMainModule()) {
       if (value.modelIdentity) modelIdentities.add(value.modelIdentity);
       if ((run.code === 3 || run.code === 4) && providerUnavailableError.test(value.error || "")) {
         const report = {
-          suite: suite.suite,
+          suite: publicSuiteName,
           suiteFile,
           suiteVersion: suite.version,
           suiteSha256,
@@ -897,7 +995,7 @@ if (isMainModule()) {
     forbiddenPassed: results.filter((r) => r.forbiddenPass).length
   };
   const report = {
-    suite: suite.suite,
+    suite: publicSuiteName,
     suiteFile,
     suiteVersion: suite.version,
     suiteSha256,
