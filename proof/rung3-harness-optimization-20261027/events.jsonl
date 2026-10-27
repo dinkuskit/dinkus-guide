@@ -14,3 +14,6 @@
 {"ts":"2026-10-27T14:41:38Z","event":"epoch2_reviews_completed","headSha":"20dbd53669d1d71ca1f90dfd945165b7016ba6cd","ci":"pass","secondaryP3":"OC-2.1","clawSweeper":"ready_0_findings","nextMove":"repair"}
 {"ts":"2026-10-27T14:47:38Z","event":"epoch3_repair_committed","evaluatedSha":"8a14a80cc411ae2b9ee3509028c75b900a285014","unitTests":"60/60","verify":"pass"}
 {"ts":"2026-10-27T15:03:37Z","event":"epoch3_exact_sha_dev_and_blind_holdout_completed","evaluatedSha":"8a14a80cc411ae2b9ee3509028c75b900a285014","devRetrieval":"53/56","devExtractive":"69/75","devModel":"67/75","holdoutRetrieval":"21/22","holdoutExtractive":"26/28","holdoutModel":"25/28","loopbackClosed":true}
+{"ts":"2026-10-27T15:12:17Z","event":"epoch3_reviews_completed","headSha":"d533f96dbd9cff8c9af13ee57ee4aa43e7866bd8","ci":"pass","secondaryP3":"OC-3.1","clawSweeper":"ready_0_findings","nextMove":"repair"}
+{"ts":"2026-10-27T15:15:03Z","event":"epoch4_repair_committed","evaluatedSha":"f08c194c3a43a1a42cfeca1378121fb07af6f16f","unitTests":"60/60","verify":"pass"}
+{"ts":"2026-10-27T15:32:08Z","event":"epoch4_exact_sha_dev_and_blind_holdout_completed","evaluatedSha":"f08c194c3a43a1a42cfeca1378121fb07af6f16f","devRetrieval":"53/56","devExtractive":"67/75","devModel":"68/75","holdoutRetrieval":"21/22","holdoutExtractive":"26/28","holdoutModel":"24/28","loopbackClosed":true}

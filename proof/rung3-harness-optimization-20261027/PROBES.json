@@ -1,7 +1,7 @@
 {
   "experimentId": "dinkus-guide-rung3-pretraining-probes-20261027",
   "baseSha": "af7038971ade6f3d7d55a0dd8e5e4fc3c1dd24d9",
-  "composedImplementationSha": "8a14a80cc411ae2b9ee3509028c75b900a285014",
+  "composedImplementationSha": "f08c194c3a43a1a42cfeca1378121fb07af6f16f",
   "corpusHash": "2bc34f2be1c0d91d2e5ee2a1acf5ba466e67ae11bdfe379214107b45d32835b2",
   "sources": 164,
   "chunks": 2154,
@@ -63,9 +63,9 @@
     },
     {
       "id": "Probe-A2",
-      "surface": "src/guide.js (expandChunkWindow, coalesceAdjacentWindows, Pass-1/Pass-2 multi-section rankEvidence, refusalOrUnsupported)",
-      "targetBottleneck": "Span-fact recall@12 = 33/56 (58.9%) despite 56/56 (100.0%) sourceRecall@12, plus ungrounded proper-entity / guide self-mutation abstentions",
-      "change": "Keep chunkCorpus keys frozen for embedding-cache compatibility; expand seed chunks into bounded contiguous GitHub line windows, coalesce adjacent windows per source, cap Pass-1 distinct sources at 9 (for k=12) so Pass-2 selects complementary query-term sections from matched long specs while keeping EmDash layer cap <= 6, and abstain on ungrounded proper-entity / guide self-mutation queries.",
+      "surface": "src/guide.js (expandChunkWindow, coalesceAdjacentWindows, Pass-1/Pass-2 multi-section rankEvidence, queryTokenInfo)",
+      "targetBottleneck": "Span-fact recall@12 = 33/56 (58.9%) despite 56/56 (100.0%) sourceRecall@12",
+      "change": "Keep chunkCorpus keys frozen for embedding-cache compatibility; expand seed chunks into bounded contiguous GitHub line windows, coalesce adjacent windows per source, cap Pass-1 distinct sources at 9 (for k=12) so Pass-2 selects complementary query-term sections from matched long specs while keeping EmDash layer cap <= 6, and filter conversational courtesy tokens while preserving main's 0.6 lexical coverage gate and refusalOrUnsupported boundary (early proper-entity/self-mutation vetoes in initial Probe A2 were removed in REVIEW_2.md and REVIEW_3.md).",
       "devRetrievalBm25": { "passed": 53, "total": 56, "score": 0.9464285714285714, "sourceHits": 56, "spanHits": 53 },
       "devExtractiveBm25": { "passed": 71, "total": 75, "score": 0.9466666666666667, "failureBuckets": { "retrieval_miss": 0, "schema_error": 0, "abstention_error": 1, "citation_miss": 0, "fact_miss": 3 } },
       "devRetrievalHybrid": { "passed": 53, "total": 56, "score": 0.9464285714285714, "sourceHits": 56, "spanHits": 53 },
