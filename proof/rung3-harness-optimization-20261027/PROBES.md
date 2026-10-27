@@ -1,7 +1,7 @@
 # Rung 3 Single-Variable Probes & Pre-Training `Propose -> Probe -> Compose` Ledger (`#4`)
 
 - **Base SHA**: `af7038971ade6f3d7d55a0dd8e5e4fc3c1dd24d9` (`origin/main`, Rung 2 baseline)
-- **Composed Implementation SHA**: `31a9f003f73714eb3b6ed5e1726f51ca8394accd`
+- **Composed Implementation SHA**: `fce6b1e528d5c93cb02d0fa1e891ebc426c8f4b1` (Epoch 1 initial compose `31a9f003f73714eb3b6ed5e1726f51ca8394accd`, Epoch 2 review repair [REVIEW_1.md](REVIEW_1.md))
 - **Frozen Corpus**: `164` pinned public sources (`2,154` chunks, `corpusHash`: `2bc34f2be1c0d91d2e5ee2a1acf5ba466e67ae11bdfe379214107b45d32835b2`)
 - **Frozen Public Dev Suite**: `eval/cases.json` (`dinkus-guide-dev-v4`, `75` cases, `suiteSha256`: `55a15780dba0c88f5df5a7ed5c50d304494443ce3f9095cd9db93a42e29d83d6`)
 - **Holdout Isolation**: Zero reads, copies, greps, or tuning against the external unseen holdout suite occurred during Stage A or Stage B. Every probe and candidate selection below used only `eval/cases.json` against the frozen `bin/dinkus-guide-eval` judge and local OpenAI-compatible loopback endpoints for `qwen3-embedding` (`4,096` dims) and `nemotron-3.5-super-vl` (`temperature: 0`, `max_tokens: 1024`, `DINKUS_GUIDE_NO_THINK=1`).

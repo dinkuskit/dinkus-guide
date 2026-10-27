@@ -1,5 +1,5 @@
 {
-  "evaluatedSourceHead": "31a9f003f73714eb3b6ed5e1726f51ca8394accd",
+  "evaluatedSourceHead": "fce6b1e528d5c93cb02d0fa1e891ebc426c8f4b1",
   "baseSha": "af7038971ade6f3d7d55a0dd8e5e4fc3c1dd24d9",
   "corpusHash": "2bc34f2be1c0d91d2e5ee2a1acf5ba466e67ae11bdfe379214107b45d32835b2",
   "sources": 164,
@@ -11,7 +11,7 @@
   "synthesisModelIdentity": "nemotron-3.5-super-vl",
   "maxTokens": 1024,
   "enableThinking": false,
-  "holdoutIsolation": "External owner-only holdout suite (mode 0600) outside public repository and never read, copied, or tuned against during Rung 3 probing; evaluated once blindly after committing 31a9f003f73714eb3b6ed5e1726f51ca8394accd with --check-disjoint eval/cases.json --summary-only so zero unseen case IDs, questions, or gold expectations enter public git.",
+  "holdoutIsolation": "External owner-only holdout suite (mode 0600) outside public repository and never read, copied, or tuned against during Rung 3 probing; evaluated blindly after committing fce6b1e528d5c93cb02d0fa1e891ebc426c8f4b1 with --check-disjoint eval/cases.json --summary-only so zero unseen case IDs, questions, or gold expectations enter public git.",
   "consumer": "Local OpenAI-compatible loopback endpoints for qwen3-embedding and nemotron-3.5-super-vl; temporary loopback forwards closed immediately after evaluation.",
   "runs": [
     {
@@ -418,9 +418,9 @@
       "modelIdentity": [
         "nemotron-3.5-super-vl"
       ],
-      "passed": 67,
+      "passed": 66,
       "total": 75,
-      "score": 0.8933333333333333,
+      "score": 0.88,
       "sourceHits": 56,
       "eligible": 56,
       "sourceRecallAtK": 1,
@@ -431,14 +431,14 @@
         "schema_error": 0,
         "abstention_error": 0,
         "citation_miss": 2,
-        "fact_miss": 6
+        "fact_miss": 7
       },
       "forbiddenClaims": 0,
       "subscores": {
         "abstentionPassed": 75,
         "citationSpanValid": 75,
         "citationPassed": 71,
-        "factPassed": 69,
+        "factPassed": 68,
         "forbiddenPassed": 75
       },
       "byCategory": {
@@ -483,15 +483,15 @@
         },
         "cross_plugin": {
           "total": 13,
-          "passed": 9,
-          "failed": 4,
-          "score": 0.6923076923076923,
+          "passed": 8,
+          "failed": 5,
+          "score": 0.6153846153846154,
           "failureBuckets": {
             "retrieval_miss": 0,
             "schema_error": 0,
             "abstention_error": 0,
             "citation_miss": 2,
-            "fact_miss": 2
+            "fact_miss": 3
           }
         },
         "honest_abstention": {
@@ -961,9 +961,9 @@
       "modelIdentity": [
         "nemotron-3.5-super-vl"
       ],
-      "passed": 26,
+      "passed": 25,
       "total": 28,
-      "score": 0.9285714285714286,
+      "score": 0.8928571428571429,
       "sourceHits": 21,
       "eligible": 22,
       "sourceRecallAtK": 0.9545454545454546,
@@ -972,16 +972,16 @@
       "failureBuckets": {
         "retrieval_miss": 1,
         "schema_error": 0,
-        "abstention_error": 0,
+        "abstention_error": 1,
         "citation_miss": 0,
         "fact_miss": 1
       },
       "forbiddenClaims": 1,
       "subscores": {
-        "abstentionPassed": 27,
-        "citationSpanValid": 27,
-        "citationPassed": 27,
-        "factPassed": 26,
+        "abstentionPassed": 26,
+        "citationSpanValid": 26,
+        "citationPassed": 26,
+        "factPassed": 25,
         "forbiddenPassed": 27
       },
       "byCategory": {
@@ -1013,13 +1013,13 @@
         },
         "transition_trap": {
           "total": 4,
-          "passed": 3,
-          "failed": 1,
-          "score": 0.75,
+          "passed": 2,
+          "failed": 2,
+          "score": 0.5,
           "failureBuckets": {
             "retrieval_miss": 0,
             "schema_error": 0,
-            "abstention_error": 0,
+            "abstention_error": 1,
             "citation_miss": 0,
             "fact_miss": 1
           }
