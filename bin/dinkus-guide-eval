@@ -117,19 +117,64 @@ function parseArgs(rawArgs = args) {
   return values;
 }
 
-function isInsideRoot(resolvedPath) {
-  let target = resolvedPath;
-  try { target = realpathSync(resolvedPath); } catch { /* ignore missing path before readFile */ }
-  const rel = path.relative(root, target).replace(/\\/g, "/");
-  return Boolean(rel && !rel.startsWith("..") && !path.isAbsolute(rel)) ? rel : null;
+const canonicalRoot = (() => {
+  try { return realpathSync(root); } catch { return root; }
+})();
+
+function resolveWithExistingParentRealpath(inputPath) {
+  const abs = path.resolve(inputPath);
+  const trailing = [];
+  let current = abs;
+  for (;;) {
+    try {
+      const realCurrent = realpathSync(current);
+      return trailing.length ? path.join(realCurrent, ...trailing.reverse()) : realCurrent;
+    } catch {
+      const parent = path.dirname(current);
+      if (parent === current) return abs;
+      trailing.push(path.basename(current));
+      current = parent;
+    }
+  }
+}
+
+function relativeInsideBase(baseDir, targetPath) {
+  const rel = path.relative(baseDir, targetPath).replace(/\\/g, "/");
+  if (rel === "") return ".";
+  if (rel === ".." || rel.startsWith("../") || path.isAbsolute(rel)) return null;
+  return rel;
+}
+
+export function isInsideRoot(resolvedPath, baseRoot = canonicalRoot) {
+  const canonicalBase = baseRoot === canonicalRoot
+    ? canonicalRoot
+    : resolveWithExistingParentRealpath(baseRoot);
+  const abs = path.resolve(resolvedPath);
+  const realTarget = resolveWithExistingParentRealpath(abs);
+  const realRel = relativeInsideBase(canonicalBase, realTarget);
+  if (realRel !== null) return realRel;
+
+  const trailing = [];
+  let current = abs;
+  for (;;) {
+    const parent = path.dirname(current);
+    if (parent === current) break;
+    const leaf = path.basename(current);
+    const parentReal = resolveWithExistingParentRealpath(parent);
+    const candidate = path.join(parentReal, leaf, ...trailing);
+    const rel = relativeInsideBase(canonicalBase, candidate);
+    if (rel !== null) return rel;
+    trailing.unshift(leaf);
+    current = parent;
+  }
+  return null;
 }
 
 function sanitizeSuiteLabel(resolvedPath, { redactExternal = false } = {}) {
   const rel = isInsideRoot(resolvedPath);
   if (rel) return rel;
   if (redactExternal) return "<external-suite>";
-  let target = resolvedPath;
-  try { target = realpathSync(resolvedPath); } catch { /* ignore missing path before readFile */ }
+  const target = resolveWithExistingParentRealpath(resolvedPath);
   return path.basename(target);
 }
 
@@ -1339,26 +1384,26 @@ if (isMainModule()) {
 
   let suite;
   try {
+    if (/"locked_promotion_exam"/.test(rawSuiteText)) {
+      suiteFile = "<external-suite>";
+    }
     let parsedSuite;
     try { parsedSuite = JSON.parse(rawSuiteText); } catch { throw new Error("suite is not valid JSON"); }
     const isLockedExam = Boolean(
       parsedSuite && typeof parsedSuite === "object" && !Array.isArray(parsedSuite) && parsedSuite.role === "locked_promotion_exam"
     );
     if (isLockedExam) {
-      suiteFile = sanitizeSuiteLabel(suitePath, { redactExternal: true });
+      suiteFile = "<external-suite>";
       if (isInsideRoot(suitePath)) {
         throw new Error("locked_promotion_exam suites must reside outside the public repository");
       }
       if (!options.summaryOnly) {
         throw new Error("locked_promotion_exam suites require --summary-only");
       }
-      const expectedDevPath = path.join(root, "eval", "cases.json");
-      let canonicalDevPath = expectedDevPath;
-      try { canonicalDevPath = realpathSync(expectedDevPath); } catch { /* fallback to expectedDevPath */ }
-      const checksPublicDev = options.checkDisjoint.some((rawRef) => {
-        const candidate = path.resolve(process.cwd(), rawRef);
-        try { return realpathSync(candidate) === canonicalDevPath; } catch { return candidate === expectedDevPath; }
-      });
+      const canonicalDevPath = resolveWithExistingParentRealpath(path.join(root, "eval", "cases.json"));
+      const checksPublicDev = options.checkDisjoint.some(
+        (rawRef) => resolveWithExistingParentRealpath(path.resolve(process.cwd(), rawRef)) === canonicalDevPath
+      );
       if (!checksPublicDev) {
         throw new Error("locked_promotion_exam suites require --check-disjoint eval/cases.json");
       }
@@ -1372,6 +1417,7 @@ if (isMainModule()) {
     : suite.suite;
 
   const disjointFrom = [];
+  const validatedRefs = [];
   for (const rawRef of options.checkDisjoint) {
     const refPath = path.resolve(process.cwd(), rawRef);
     let refLabel = sanitizeSuiteLabel(refPath, { redactExternal: options.summaryOnly });
@@ -1382,16 +1428,25 @@ if (isMainModule()) {
       failUsage(`invalid disjoint reference (${refLabel}): ${error?.code === "ENOENT" ? "suite file not found" : "unable to read suite file"}`);
     }
     try {
+      if (/"locked_promotion_exam"/.test(rawRefText)) {
+        refLabel = "<external-suite>";
+      }
       let parsedRef;
       try { parsedRef = JSON.parse(rawRefText); } catch { throw new Error("suite is not valid JSON"); }
       const isLockedRef = Boolean(
         parsedRef && typeof parsedRef === "object" && !Array.isArray(parsedRef) && parsedRef.role === "locked_promotion_exam"
       );
-      if (isLockedRef && !options.summaryOnly) {
-        refLabel = sanitizeSuiteLabel(refPath, { redactExternal: true });
-        throw new Error("locked_promotion_exam references require --summary-only");
+      if (isLockedRef) {
+        refLabel = "<external-suite>";
+        if (isInsideRoot(refPath)) {
+          throw new Error("locked_promotion_exam references must reside outside the public repository");
+        }
+        if (!options.summaryOnly) {
+          throw new Error("locked_promotion_exam references require --summary-only");
+        }
       }
       const refSuite = validateSuite(parsedRef, { redactCaseDetails: options.summaryOnly || isLockedRef });
+      validatedRefs.push({ refLabel, refSuite, redactCaseDetails: options.summaryOnly || isLockedRef });
       const publicRefSuiteName = options.summaryOnly && refLabel === "<external-suite>"
         ? "<external-suite>"
         : refSuite.suite;
@@ -1438,14 +1493,26 @@ if (isMainModule()) {
   }
 
   const corpusSources = await loadCorpusSources(root);
+  const manifestIdSet = new Set(corpusSources.keys());
   try {
     validateSuite(suite, {
-      manifestIds: new Set(corpusSources.keys()),
+      manifestIds: manifestIdSet,
       sourceRepositories: corpusSources,
-      redactCaseDetails: options.summaryOnly
+      redactCaseDetails: options.summaryOnly || suite.role === "locked_promotion_exam"
     });
   } catch (error) {
     failUsage(`invalid suite (${suiteFile}): ${error.message}`);
+  }
+  for (const { refLabel, refSuite, redactCaseDetails } of validatedRefs) {
+    try {
+      validateSuite(refSuite, {
+        manifestIds: manifestIdSet,
+        sourceRepositories: corpusSources,
+        redactCaseDetails
+      });
+    } catch (error) {
+      failUsage(`disjointness check failed (${refLabel}): ${error.message}`);
+    }
   }
 
   // Step 1: Standalone retrieval recall@k before any model synthesis runs

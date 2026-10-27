@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { copyFile, mkdtemp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdtemp, mkdir, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import http from "node:http";
 import { spawn } from "node:child_process";
 import os from "node:os";
@@ -13,6 +13,7 @@ import {
   FAILURE_BUCKETS,
   assertSuitesDisjoint,
   computeRecallCase,
+  isInsideRoot,
   loadCorpusSources,
   scoreGuideRun,
   summarizeSuiteResults,
@@ -500,6 +501,18 @@ test("CLI supports corpus embed, external --suite, --check-disjoint, --summary-o
     await copyFile(new URL("../src/corpus.js", import.meta.url), path.join(temporaryRoot, "src", "corpus.js"));
 
     const commit = "0123456789012345678901234567890123456789";
+    const mockRepos = [
+      "dinkuskit/ship",
+      "dinkuskit/template-store",
+      "dinkuskit/template-store",
+      "dinkuskit/dinkuskit",
+      "dinkuskit/commerce",
+      "dinkuskit/payments",
+      "dinkuskit/inventory",
+      "emdash-cms/emdash",
+      "dinkuskit/template-store",
+      "dinkuskit/ship"
+    ];
     const sources = [];
     for (let idx = 1; idx <= 10; idx += 1) {
       const id = `doc-${String(idx).padStart(2, "0")}`;
@@ -507,11 +520,12 @@ test("CLI supports corpus embed, external --suite, --check-disjoint, --summary-o
         ? "# Pitney Bowes tracking\nPitney Bowes webhook uses X-PB-ReferenceId.\n"
         : `# Store doc ${idx}\nRun pnpm dev to launch local template store ${idx}.\n`;
       const sha256 = createHash("sha256").update(content).digest("hex");
-      const repo = idx === 1 ? "dinkuskit/ship" : "dinkuskit/template-store";
+      const repo = mockRepos[idx - 1];
+      const layer = repo === "emdash-cms/emdash" ? "emdash" : "dinkuskit";
       sources.push({
         id,
         repository: repo,
-        layer: "dinkuskit",
+        layer,
         status: "active",
         commit,
         path: `docs/${id}.md`,
@@ -772,6 +786,85 @@ test("CLI supports corpus embed, external --suite, --check-disjoint, --summary-o
       assert.doesNotMatch(stream, /secret-locked-exam/);
       assert.doesNotMatch(stream, /secret-locked-suite-name/);
       assert.doesNotMatch(stream, /secret-locked-case-1/);
+    }
+
+    // Component-aware containment: genuine external two-dot-prefixed locked exam succeeds, while repository-local ..exam.json, ..hidden-dir/exam.json, and symlinks fail closed
+    const lockedPayload = await readFile(lockedExamPath, "utf8");
+    const externalDotDotExamPath = path.join(externalHoldoutDir, "..external-exam.json");
+    await writeFile(externalDotDotExamPath, lockedPayload);
+    assert.equal(isInsideRoot(externalDotDotExamPath, temporaryRoot), null);
+    assert.equal(isInsideRoot(path.join(`${temporaryRoot}-sibling`, "exam.json"), temporaryRoot), null);
+
+    const externalDotDotRun = await runBin("dinkus-guide-eval", [
+      "run", "--suite", externalDotDotExamPath, "--check-disjoint", "eval/cases.json", "--summary-only", "--mode", "retrieval", "--json"
+    ], {
+      DINKUS_GUIDE_EMBED_BASE_URL: loopbackUrl,
+      DINKUS_GUIDE_EMBED_MODEL: "qwen3-embedding"
+    });
+    assert.ok(externalDotDotRun.code === 0 || externalDotDotRun.code === 1);
+    assert.equal(externalDotDotRun.value.suite, "<external-suite>");
+    assert.equal(externalDotDotRun.value.suiteFile, "<external-suite>");
+    assert.equal(externalDotDotRun.value.results, undefined);
+    assert.doesNotMatch(externalDotDotRun.stdout, /\.\.external-exam/);
+    assert.doesNotMatch(externalDotDotRun.stdout, /secret-locked-suite-name/);
+    assert.doesNotMatch(externalDotDotRun.stdout, /secret-locked-case-1/);
+
+    const repoDotDotExamPath = path.join(temporaryRoot, "..exam.json");
+    const repoDotDotDirPath = path.join(temporaryRoot, "..hidden-dir");
+    const repoDotDotNestedExamPath = path.join(repoDotDotDirPath, "exam.json");
+    const repoSymlinkOutPath = path.join(temporaryRoot, "..symlink-out-exam.json");
+    const repoSymlinkDirOutPath = path.join(temporaryRoot, "..symlink-dir-out");
+    const repoSymlinkDirExamPath = path.join(repoSymlinkDirOutPath, "secret-locked-exam-v4.json");
+    const externalSymlinkInPath = path.join(externalHoldoutDir, "symlink-into-repo.json");
+    await mkdir(repoDotDotDirPath);
+    await writeFile(repoDotDotExamPath, lockedPayload);
+    await writeFile(repoDotDotNestedExamPath, lockedPayload);
+    await symlink(lockedExamPath, repoSymlinkOutPath);
+    await symlink(externalHoldoutDir, repoSymlinkDirOutPath);
+    await symlink(repoDotDotExamPath, externalSymlinkInPath);
+
+    assert.equal(isInsideRoot(temporaryRoot, temporaryRoot), ".");
+    assert.equal(isInsideRoot(repoDotDotExamPath, temporaryRoot), "..exam.json");
+    assert.equal(isInsideRoot(repoDotDotNestedExamPath, temporaryRoot), "..hidden-dir/exam.json");
+    assert.equal(isInsideRoot(repoSymlinkOutPath, temporaryRoot), "..symlink-out-exam.json");
+    assert.equal(isInsideRoot(repoSymlinkDirExamPath, temporaryRoot), "..symlink-dir-out/secret-locked-exam-v4.json");
+    assert.equal(isInsideRoot(externalSymlinkInPath, temporaryRoot), "..exam.json");
+
+    for (const internalCandidate of [
+      repoDotDotExamPath,
+      repoDotDotNestedExamPath,
+      repoSymlinkOutPath,
+      repoSymlinkDirExamPath,
+      externalSymlinkInPath
+    ]) {
+      const blockedInternalRun = await runBin("dinkus-guide-eval", [
+        "run", "--suite", internalCandidate, "--check-disjoint", "eval/cases.json", "--summary-only", "--mode", "retrieval", "--json"
+      ]);
+      assert.equal(blockedInternalRun.code, 2, `expected containment rejection for ${internalCandidate}`);
+      assert.match(
+        blockedInternalRun.value.error,
+        /invalid suite \(<external-suite>\): locked_promotion_exam suites must reside outside the public repository/
+      );
+      for (const stream of [blockedInternalRun.stdout, blockedInternalRun.stderr]) {
+        assert.doesNotMatch(stream, /\.\.exam\.json/);
+        assert.doesNotMatch(stream, /\.\.hidden-dir/);
+        assert.doesNotMatch(stream, /\.\.symlink-out-exam/);
+        assert.doesNotMatch(stream, /secret-locked-suite-name/);
+        assert.doesNotMatch(stream, /secret-locked-case-1/);
+      }
+    }
+
+    const blockedInternalRefRun = await runBin("dinkus-guide-eval", [
+      "run", "--suite", "eval/cases.json", "--check-disjoint", repoDotDotExamPath, "--summary-only", "--json"
+    ]);
+    assert.equal(blockedInternalRefRun.code, 2);
+    assert.match(
+      blockedInternalRefRun.value.error,
+      /disjointness check failed \(<external-suite>\): locked_promotion_exam references must reside outside the public repository/
+    );
+    for (const stream of [blockedInternalRefRun.stdout, blockedInternalRefRun.stderr]) {
+      assert.doesNotMatch(stream, /\.\.exam\.json/);
+      assert.doesNotMatch(stream, /secret-locked-suite-name/);
     }
 
     // Unavailable model provider under --summary-only also redacts external suite label

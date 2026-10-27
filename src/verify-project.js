@@ -20,7 +20,7 @@ if (evalRepoSet.size !== APPROVED_REPOSITORIES.size || [...APPROVED_REPOSITORIES
 
 const evalEntries = await readdir(path.join(root, "eval"));
 for (const name of evalEntries) {
-  if (/holdout|promotion/i.test(name) || (name.endsWith(".json") && name !== "cases.json")) {
+  if (name !== "cases.json") {
     throw new Error(`public eval/ directory must contain only development cases.json (found ${name}); keep unseen holdout material external`);
   }
 }
