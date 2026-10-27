@@ -446,42 +446,34 @@ export function verifyCitationSpan(citation, corpusSources = null) {
 const CORPUS_NOUN_PATTERN = "(?:corpus|sources?|documents?|documentation|docs|evidence|excerpts?|passages?|files?|charters?|manifest|contracts?|context|materials?|references?)";
 const CORPUS_MOD_PATTERN = "(?:(?:pinned|provided|available|public|retrieved|current)\\s+)*";
 const LEADING_CORPUS_FRAME_PATTERN = `(?:(?:based\\s+on|according\\s+to|in|within|across)\\s+(?:the\\s+|these\\s+)?${CORPUS_MOD_PATTERN}${CORPUS_NOUN_PATTERN}\\s*,\\s*)?`;
-const EXPLICIT_GUIDE_OR_CORPUS_SUBJECT_PATTERN = `(?:dinkusguide|dinkus-guide|(?:this|the)\\s+(?:(?:read-only|text-only|public(?:-source)?|documentation)\\s+)*guide|i|(?:the\\s+|these\\s+)?${CORPUS_MOD_PATTERN}${CORPUS_NOUN_PATTERN})`;
+const EXPLICIT_GUIDE_OR_CORPUS_SUBJECT_PATTERN = `(?:dinkusguide|dinkus-guide|(?:this|the)\\s+(?:(?:optional|read-only|text-only|public(?:-source)?|documentation)\\s+)*guide|i|(?:the\\s+|these\\s+)?${CORPUS_MOD_PATTERN}${CORPUS_NOUN_PATTERN})`;
 const ANAPHORIC_GUIDE_SUBJECT_PATTERN = `(?:${EXPLICIT_GUIDE_OR_CORPUS_SUBJECT_PATTERN}|it)`;
 
 const ABSTENTION_BUILTIN_GUIDANCE_SENTENCE_RE = /^provide\s+a\s+documented\s+text\s+contract\s+or\s+consult\s+the\s+pinned\s+(?:public\s+)?sources[.!?]?$/i;
 
-function makeSubjectScopeClauseRe(allowAnaphoricIt) {
-  const subjectPattern = allowAnaphoricIt ? ANAPHORIC_GUIDE_SUBJECT_PATTERN : EXPLICIT_GUIDE_OR_CORPUS_SUBJECT_PATTERN;
-  return new RegExp(
-    `^${LEADING_CORPUS_FRAME_PATTERN}${subjectPattern}(?:\\s+in\\s+v1)?\\s+` +
-    `(?:is\\s+(?:(?:a|an)\\s+)?(?:(?:optional|read-only|text-only|public(?:-source)?)\\s*,?\\s*(?:and\\s+)?)*(?:read-only|text-only)(?:\\s+(?:documentation\\s+)?guide)?\\b|` +
-    `is\\s+(?:unable\\s+to|not\\s+(?:able|permitted|allowed|authorized|configured)\\s+to|scoped\\s+to)\\b|` +
-    `(?:is|are)\\s+not\\s+(?:yet\\s+|currently\\s+)?(?:documented|supported|present|provided|available|mentioned|covered|included|built|implemented|specified|found|decided)\\b|` +
-    `(?:cannot|can't|will\\s+not|won't|must\\s+not|may\\s+not|does\\s+not|do\\s+not)\\b|` +
-    `(?:refuses?|forbids?|lacks?)\\b|` +
-    `only\\s+(?:covers?|documents?|describes?|supports?|mentions?|addresses?|applies|includes?|contains?|answers?)\\b|` +
-    `describes?\\s+[A-Za-z0-9/@_' -]+?\\s+as\\s+(?:(?:a|an)\\s+)?(?:(?:unbuilt|undecided|future|open|retired)\\s+)*(?:target\\s+direction|open\\s+decision|retired\\b))`,
-    "i"
-  );
-}
+const ABSTENTION_EXPLICIT_SUBJECT_TAIL_RE = new RegExp(`^${LEADING_CORPUS_FRAME_PATTERN}${EXPLICIT_GUIDE_OR_CORPUS_SUBJECT_PATTERN}(?:\\s+in\\s+v1)?\\s+(.+)$`, "i");
+const ABSTENTION_ANAPHORIC_SUBJECT_TAIL_RE = new RegExp(`^${LEADING_CORPUS_FRAME_PATTERN}${ANAPHORIC_GUIDE_SUBJECT_PATTERN}(?:\\s+in\\s+v1)?\\s+(.+)$`, "i");
 
-const ABSTENTION_EXPLICIT_SUBJECT_SCOPE_RE = makeSubjectScopeClauseRe(false);
-const ABSTENTION_ANAPHORIC_SUBJECT_SCOPE_RE = makeSubjectScopeClauseRe(true);
+const ABSTENTION_THERE_ABSENCE_CLAUSE_RE = new RegExp(
+  `^${LEADING_CORPUS_FRAME_PATTERN}there\\s+(?:is|are)\\s+(?:no|not\\s+enough|insufficient)\\s+` +
+  `(?:(?:(?:documented|public|pinned|verified|available|explicit)\\s+)*(?:evidence|documentation|information|mentions?|sources?)|` +
+  `(?:documented|public|pinned)\\s+(?:support|details|instructions))` +
+  `(?:\\s+(?:in|within|across|for|about|on|to)\\s+(.+?))?[.!?]?$`,
+  "i"
+);
 
-const ABSTENTION_NEGATIVE_VP_CONTINUATION_RE = /^(?:(?:cannot|can't|will\s+not|won't|must\s+not|may\s+not|does\s+not|do\s+not)\b|is\s+(?:unable\s+to|not\s+(?:able|permitted|allowed|authorized|configured)\s+to)\b|(?:is|are)\s+not\s+(?:yet\s+|currently\s+)?(?:documented|supported|present|provided|available|mentioned|covered|included|built|implemented|specified|found|decided)\b|(?:refuses?|forbids?|lacks?)\b|only\s+(?:covers?|documents?|describes?|supports?|mentions?|addresses?|applies|includes?|contains?|answers?)\b)/i;
-
-const ABSTENTION_IMPERSONAL_ABSENCE_CLAUSE_RE = new RegExp(
-  `^${LEADING_CORPUS_FRAME_PATTERN}(?:` +
-  `there\\s+(?:is|are)\\s+(?:no|not\\s+enough|insufficient)\\s+(?:(?:documented|public|pinned|verified|available|explicit)\\s+)*(?:evidence|documentation|information|mentions?|sources?)\\b|` +
-  `there\\s+(?:is|are)\\s+(?:no|not\\s+enough|insufficient)\\s+(?:documented|public|pinned)\\s+(?:support|details|instructions)\\b|` +
-  `(?:insufficient|no)\\s+(?:(?:documented|public|pinned|verified|available|explicit)\\s+)*(?:evidence|documentation|information)(?:\\s+(?:is|are|exists?)\\b|\\s+(?:in|within|across|for|about|on|to)\\b|[.!?]?$)` +
-  `)`,
+const ABSTENTION_BARE_ABSENCE_CLAUSE_RE = new RegExp(
+  `^${LEADING_CORPUS_FRAME_PATTERN}(?:insufficient|no)\\s+` +
+  `(?:(?:(?:documented|public|pinned|verified|available|explicit)\\s+)*(?:evidence|documentation|information)|` +
+  `(?:documented|public|pinned)\\s+(?:support|details|instructions))` +
+  `(?:\\s+(?:is|are)\\s+(?:available|provided|present|found|included|documented)(?:\\s+(?:in|within|across|for|about|on|to)\\s+(.+?))?|` +
+  `\\s+exists?(?:\\s+(?:in|within|across|for|about|on|to)\\s+(.+?))?|` +
+  `\\s+(?:in|within|across|for|about|on|to)\\s+(.+?))?[.!?]?$`,
   "i"
 );
 
 const ABSTENTION_PASSIVE_TOPIC_CLAUSE_RE = new RegExp(
-  `^${LEADING_CORPUS_FRAME_PATTERN}(?<topic>[A-Za-z0-9][A-Za-z0-9/@_' -]{0,120}?)\\s+(?:is|are)\\s+` +
+  `^${LEADING_CORPUS_FRAME_PATTERN}(?<topic>[A-Za-z0-9"\`][A-Za-z0-9/@_'"\` -]*(?:\\.[A-Za-z0-9_-]+[A-Za-z0-9/@_'"\` -]*)*?)\\s+(?:is|are)\\s+` +
   `(?:not\\s+(?:yet\\s+|currently\\s+)?(?:documented|supported|present|provided|available|mentioned|covered|included|built|implemented|specified|found|decided)|` +
   `unverified|unsupported|undocumented|unbuilt|undecided|(?:(?:a|an)\\s+)?(?:(?:unbuilt|future)\\s+)?target\\s+direction|(?:an\\s+)?open\\s+decision)` +
   `(?:\\s+(?:in|by|within|across)\\s+(?:the\\s+)?${CORPUS_MOD_PATTERN}(?:${CORPUS_NOUN_PATTERN}|v1))?[.!?]?$`,
@@ -494,15 +486,22 @@ const ABSTENTION_CLAUSE_HARD_PIVOT_RE = /[;:—–]|\s--\s|\b(?:but|however|alth
 
 const ABSTENTION_AUXILIARY_RE = /\b(?:is|are|was|were|am|be|been|has|have|had|does|do|did|can|cannot|can't|could|will|won't|would|should|may|might|must)\b/i;
 
-const ABSTENTION_FINITE_VERB_RE = /\b(?:is|are|was|were|am|be|been|has|have|had|does|do|did|can|cannot|can't|could|will|won't|would|should|may|might|must|allows?|performs?|executes?|refuses?|forbids?|supports|implements?|contains?|includes?|provides?|covers|describes?|mentions?|specifies|specify|defines?|addresses|discusses|explains?|indicates?|shows?|confirms?|modifies|modify|deletes?|deploys?|exports?|lives?|works?|uses?|runs|resides?|owes?|paid|bought|ordered)\b/i;
+const ABSTENTION_FINITE_VERB_RE = /\b(?:is|are|was|were|am|be|been|has|have|had|does|do|did|can|cannot|can't|could|will|won't|would|should|may|might|must|allows?|performs?|executes?|refuses?|forbids?|supports|implements?|contains?|includes?|provides?|covers|describes?|mentions?|specifies|specify|defines?|addresses|applies|discusses|explains?|indicates?|shows?|confirms?|modifies|modify|mutates?|edits?|commits?|deletes?|deploys?|exports?|exposes?|lives?|works?|uses?|runs|resides?|owes?|paid|bought|ordered|(?:answers|documents|states)\s+(?:a|an|the|this|that|these|those|all|any|[A-Za-z]{3,}))\b/i;
 
-const ABSTENTION_COORDINATED_VERB_START_RE = /^(?:is|are|was|were|am|be|been|has|have|had|does|do|did|can|cannot|can't|could|will|won't|would|should|may|might|must|allows?|performs?|executes?|refuses?|forbids?|implements?|contains?|includes?|provides?|describes?|specifies|specify|defines?|discusses|explains?|indicates?|shows?|confirms?|modifies|modify|deletes?|deploys?|exports?|lives?|works?|uses?|resides?|owes?|paid|bought|ordered|(?:supports?|covers?|mentions?|addresses|runs?)\s+(?:a|an|the|this|that|these|those|all|any|live|automated|manual|[A-Z]))\b/i;
+const ABSTENTION_COORDINATED_VERB_START_RE = /^(?:is|are|was|were|am|be|been|has|have|had|does|do|did|can|cannot|can't|could|will|won't|would|should|may|might|must|allows?|performs?|executes?|refuses?|forbids?|implements?|contains?|includes?|provides?|describes?|specifies|specify|defines?|applies|apply|discusses|explains?|indicates?|shows?|confirms?|modifies|modify|mutates?|edits?|commits?|deletes?|deploys?|exports?|exposes?|lives?|works?|uses?|resides?|owes?|paid|bought|ordered|(?:supports?|covers?|mentions?|addresses|runs?|documents?|states?|answers?)\s+(?:a|an|the|this|that|these|those|all|any|live|automated|manual|[A-Za-z]{3,}))\b/i;
 
-const ABSTENTION_BARE_INFINITIVE_START_RE = /^(?:access|address|allow|answer|change|commit|confirm|configure|consult|contain|cover|define|delete|deploy|describe|detail|discuss|document|execute|explain|export|expose|find|forbid|forge|implement|include|indicate|inspect|mention|modify|mutate|perform|prove|provide|refuse|retrieve|run|show|specify|state|store|support|sync|use|verify|view|write)\b/i;
+const ABSTENTION_BARE_INFINITIVE_START_RE = /^(?:access|address|allow|answer|be|change|commit|confirm|configure|consult|contain|cover|define|delete|deploy|describe|detail|discuss|document|edit|execute|explain|export|expose|find|forbid|forge|have|implement|include|indicate|inspect|mention|modify|mutate|perform|prove|provide|refuse|retrieve|run|show|specify|state|support|sync|use|verify|view|write)\b/i;
+
+const ABSTENTION_COMPLEMENT_NEGATION_RE = /\b(?:not|never|no|neither|none|nothing|without|lack|lacks|lacking|missing|unable|cannot|can't|won't)\b/i;
+const ABSTENTION_COMPLEMENT_FINITE_AUX_RE = /\b(?:is|are|was|were|am|been|being|has|had|does|do|did|can|cannot|can't|could|will|won't|would|should|may|might|must)\b/i;
+const ABSTENTION_COMPLEMENT_3SG_VERB_RE = /\b(?:allows|performs|executes|refuses|forbids|implements|contains|includes|provides|describes|specifies|defines|applies|discusses|explains|indicates|shows|confirms|modifies|mutates|edits|commits|deletes|deploys|exports|exposes|lives|works|uses|resides|owes)\b/i;
+const ABSTENTION_COMPLEMENT_SUBORDINATE_RE = /\b(?:whether|if)\b|\bthat\s+(?!question\b|version\b|feature\b|topic\b|capability\b|integration\b|configuration\b|workflow\b|command\b|endpoint\b|request\b|setting\b)/i;
+const ABSTENTION_PLURAL_SUBJECT_VERB_RE = /\b(?:plugins|connectors|adapters|packages|modules|services|systems|models|endpoints|commands|tools|integrations|features|sources|documents|files|contracts|charters|secrets|keys)\s+(?:allow|perform|execute|refuse|forbid|support|implement|contain|include|provide|cover|describe|mention|specify|define|address|apply|discuss|explain|indicate|show|confirm|modify|mutate|edit|commit|delete|deploy|export|expose|use|run|access|change|configure|sync|verify|prove|state|write)\b/i;
+const ABSTENTION_POSTPOSITIVE_PREDICATE_ITEM_RE = /\s+\b(?:available|enabled|present|supported|documented|included|permitted|allowed|authorized|configured|implemented|built|verified|found|shown|exposed|public|optional)\s*$/i;
 
 const ABSTENTION_ALLOWED_CHARS_RE = /^[A-Za-z0-9 .,!?;:'"`()/@_\r\n-]+$/;
 
-const ABSTENTION_DOUBLE_NEGATION_RE = /\b(?:not|never|no)\s+(?:unable|missing|lacking|lack|without|unsupported|undocumented|unbuilt|unavailable|unverified|forbidden|prohibited|restricted|blocked)\b|\b(?:is|are|was|were)\s+not\s+(?:read-only|text-only|optional|public|scoped)\b|\b(?:does|do|did|will|can)\s+not\s+(?:refuse|forbid)\b/i;
+const ABSTENTION_DOUBLE_NEGATION_RE = /\b(?:cannot|can't|won't|(?:can|could|will|would|should|may|might|must|does|do|did|is|are|was|were|am|has|have|had)\s+not)\s+(?:not|never)\b|\b(?:not|never|no)\s+(?:unable|missing|lacking|lack|without|unsupported|undocumented|unbuilt|unavailable|unverified|forbidden|prohibited|restricted|blocked)\b|\b(?:is|are|was|were|am)\s+not\s+(?:read-only|text-only|optional|public|scoped)\b|\b(?:does|do|did|will|can|cannot|can't)\s+(?:not\s+)?(?:refuse|forbid)\b/i;
 
 const ABSTENTION_EMBEDDED_CLAIM_RE = /\b(?:that|whether|where|when|if)\s+(?!(?:dinkusguide|dinkus-guide|(?:this|the)\s+guide|it)\b)[A-Za-z0-9/@_' -]{1,80}?\s+\b(?:is|are|was|were|has|have|had|does|do|did|can|cannot|can't|will|won't|would|should|may|might|must|contains?|includes?|holds?|stores?|shows?|exports?|lives?|works?|owes?|paid|ordered)\b/i;
 
@@ -510,21 +509,23 @@ const ABSTENTION_DISALLOWED_CONTENT_RE = /```|https?:\/\/|(?:^|\n)\s*(?:[-*]\s+|
 
 const TOPIC_FUNCTION_WORDS = new Set(["a", "an", "the", "this", "that", "these", "those", "and", "or", "of", "in", "for", "to", "with", "on", "by", "from"]);
 
-const ALLOWED_ABSTENTION_TOKENS = new Set([
-  "a", "an", "the", "this", "that", "these", "those", "it", "its", "there",
+export const ALLOWED_ABSTENTION_TOKENS = new Set([
+  "a", "an", "the", "this", "that", "these", "those", "i", "it", "its", "there",
   "which", "what", "whether", "how",
   "is", "are", "was", "were", "be", "been", "being", "am", "has", "have", "had", "do", "does", "did",
   "can", "cannot", "cant", "t", "s", "could", "will", "won", "would", "should", "may", "might", "must",
   "not", "no", "none", "nor", "neither", "never", "nothing", "without", "lack", "lacks", "lacking", "missing", "absent", "unavailable", "unknown",
   "in", "on", "at", "to", "for", "of", "from", "by", "with", "within", "into", "onto", "about", "across", "against",
   "among", "around", "as", "before", "after", "between", "beyond", "during", "over", "through", "under", "until", "up", "out", "outside",
+  "based", "according",
   "and", "or", "but", "so", "yet", "if", "unless", "while", "whereas", "although", "though", "because", "since",
   "than", "then", "therefore", "thus", "instead", "except",
   "only", "solely", "strictly", "exclusively", "merely", "just", "also", "either", "any", "all", "both", "each",
   "other", "another", "such", "same", "specific", "specifically", "explicit", "explicitly", "direct", "directly",
-  "current", "currently", "present", "presently", "still", "already",
+  "current", "currently", "present", "presently", "still", "already", "optional", "retired", "exist", "exists",
   "dinkusguide", "dinkus", "guide", "dinkuskit", "emdash", "v1", "version", "versions",
-  "read", "text", "write", "mutable", "mutation", "mutations", "modify", "modifying", "change", "changes",
+  "read", "text", "write", "mutable", "mutate", "mutation", "mutations", "modify", "modifying", "edit", "change", "changes",
+  "commit", "delete", "deploy", "export", "expose", "use",
   "perform", "performing", "execute", "executing", "execution", "run", "running", "action", "actions", "operation", "operations", "tool", "tools",
   "unable", "able", "refuse", "refuses", "refused", "refusal", "permitted", "allowed", "allow", "allows", "authorized", "configured",
   "forbid", "forbids", "forbidden", "prohibited", "restricted", "blocked",
@@ -537,12 +538,12 @@ const ALLOWED_ABSTENTION_TOKENS = new Set([
   "contain", "contains", "contained", "include", "includes", "included", "provide", "provides", "provided",
   "cover", "covers", "covered", "describe", "describes", "described", "mention", "mentions", "mentioned",
   "specify", "specifies", "specified", "state", "states", "stated", "define", "defines", "defined",
-  "address", "addresses", "addressed", "discuss", "discusses", "discussed", "detail", "details", "detailed",
+  "address", "addresses", "addressed", "apply", "applies", "discuss", "discusses", "discussed", "detail", "details", "detailed",
   "explain", "explains", "explained", "indicate", "indicates", "indicated", "show", "shows", "shown",
   "confirm", "confirms", "verify", "prove", "consult", "inspect", "inspecting", "view", "viewing",
   "access", "accessing", "retrieve", "retrieved", "available", "found", "find", "forge", "forged", "citation", "citations", "citationids", "sourceid", "override",
   "secret", "secrets", "key", "keys",
-  "answer", "answering", "question", "questions", "request", "requests", "requested", "query", "asked", "topic", "information", "info", "data",
+  "answer", "answers", "answering", "question", "questions", "request", "requests", "requested", "query", "asked", "topic", "information", "info", "data",
   "private", "internal", "external", "third", "party",
   "screenshot", "screenshots", "image", "images", "visual", "ui",
   "feature", "features", "capability", "capabilities", "functionality", "integration", "integrations",
@@ -564,6 +565,122 @@ function tokenizeWords(text) {
   return normalizeAbstentionPunctuation(text).toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
 }
 
+function validateAbstentionParentheses(text, topicGroundedTokens) {
+  let depth = 0;
+  let start = -1;
+  for (let index = 0; index < text.length; index += 1) {
+    const ch = text[index];
+    if (ch === "(") {
+      if (depth > 0) return false;
+      depth = 1;
+      start = index;
+    } else if (ch === ")") {
+      if (depth !== 1) return false;
+      const inner = text.slice(start + 1, index);
+      if (!/^[A-Za-z0-9/@._-]{1,24}$/.test(inner)) return false;
+      const innerWords = tokenizeWords(inner);
+      if (!innerWords.length) return false;
+      const isVersionTag = /^v\d+(?:\.\d+)*$/i.test(inner);
+      if (!isVersionTag && !innerWords.every((word) => topicGroundedTokens.has(word))) {
+        return false;
+      }
+      depth = 0;
+    }
+  }
+  return depth === 0;
+}
+
+function hasBalancedQuotes(text) {
+  const doubleCount = (text.match(/"/g) ?? []).length;
+  const backtickCount = (text.match(/`/g) ?? []).length;
+  return doubleCount % 2 === 0 && backtickCount % 2 === 0 && !/""|``/.test(text);
+}
+
+function isCleanAbstentionComplement(raw, { requireBareInfinitive = false, allowLeadingHave = false } = {}) {
+  const body = String(raw ?? "").replace(/[.!?]+$/, "").trim();
+  if (!body || body.length > 220) return false;
+  if (!hasBalancedQuotes(body)) return false;
+  if (!/^(?:[A-Za-z0-9/@_'"`, -]|\.[A-Za-z0-9_-]+|\([A-Za-z0-9/@._-]{1,24}\))+$/.test(body)) return false;
+  if (body.includes(",")) {
+    if (!/^(?:[^,]+,\s+)+(?:\b(?:and|or|nor)\b\s+)[^,]+$/i.test(body)) return false;
+    const listItems = body.split(/,\s*(?:(?:and|or|nor)\b\s*)?/i).map((item) => item.trim());
+    for (const item of listItems) {
+      const words = tokenizeWords(item);
+      if (!words.length || words.length > 6) return false;
+      if (ABSTENTION_POSTPOSITIVE_PREDICATE_ITEM_RE.test(item)) return false;
+    }
+  }
+  if (ABSTENTION_COMPLEMENT_NEGATION_RE.test(body)) return false;
+  if (ABSTENTION_COMPLEMENT_FINITE_AUX_RE.test(body)) return false;
+  if (ABSTENTION_COMPLEMENT_3SG_VERB_RE.test(body)) return false;
+  if (ABSTENTION_COMPLEMENT_SUBORDINATE_RE.test(body)) return false;
+  if (ABSTENTION_PLURAL_SUBJECT_VERB_RE.test(body)) return false;
+  const haveStripped = allowLeadingHave ? body.replace(/^have\b\s*/i, "") : body;
+  if (/\bhave\b/i.test(haveStripped)) return false;
+  if (requireBareInfinitive && !ABSTENTION_BARE_INFINITIVE_START_RE.test(body)) return false;
+  return true;
+}
+
+function validateCompleteScopePredicateTail(predicateAndTail, { category = null, topicGroundedTokens = new Set() } = {}) {
+  const text = predicateAndTail.trim();
+  if (/\b(?:read-only|text-only)\b/i.test(text) &&
+      /^(?:is|am)\s+(?:(?:a|an)\s+)?(?:(?:optional|read-only|text-only|public(?:-source)?|documentation)(?:\s*,\s*(?:and\s+)?|\s+and\s+|\s+))*(?:guide|(?:optional|read-only|text-only|public(?:-source)?))(?:\s+in\s+v1)?[.!?]?$/i.test(text)) {
+    return true;
+  }
+  let match = /^(?:is|are|am)\s+(?:unable|not\s+(?:able|permitted|allowed|authorized|configured))\s+to\s+(.+?)[.!?]?$/i.exec(text);
+  if (match) return isCleanAbstentionComplement(match[1], { requireBareInfinitive: true });
+
+  match = /^(?:is|are)\s+scoped\s+to\s+(.+?)[.!?]?$/i.exec(text);
+  if (match) return isCleanAbstentionComplement(match[1]);
+
+  match = /^(?:is|are)\s+not\s+(?:yet\s+|currently\s+)?(?:documented|supported|present|provided|available|mentioned|covered|included|built|implemented|specified|found|decided)(?:\s+(?:in|by|within|across|for)\s+(.+?))?[.!?]?$/i.exec(text);
+  if (match) return match[1] === undefined || isCleanAbstentionComplement(match[1]);
+
+  match = /^(?:cannot|can't|will\s+not|won't|must\s+not|may\s+not|does\s+not|do\s+not)\s+(.+?)[.!?]?$/i.exec(text);
+  if (match) return isCleanAbstentionComplement(match[1], { requireBareInfinitive: true, allowLeadingHave: true });
+
+  match = /^(?:refuses?|forbids?|lacks?)\s+(.+?)[.!?]?$/i.exec(text);
+  if (match) return isCleanAbstentionComplement(match[1]);
+
+  match = /^(?:contains?|includes?|provides?|has|have)\s+no\s+(?:(?:documented|public|pinned|verified|available|explicit)\s+)*(?:evidence|documentation|information|mentions?|sources?)(?:\s+(?:in|within|across|for|about|on|to)\s+(.+?))?[.!?]?$/i.exec(text);
+  if (match) return match[1] === undefined || isCleanAbstentionComplement(match[1]);
+
+  match = /^only\s+(?:covers?|documents?|describes?|supports?|mentions?|addresses|apply|applies|includes?|contains?|answers?)\s+(.+?)[.!?]?$/i.exec(text);
+  if (match) return isCleanAbstentionComplement(match[1]);
+
+  if (category !== "boundary_refusal" && topicGroundedTokens.size > 0) {
+    match = /^describes?\s+(.+?)\s+as\s+(?:(?:a|an)\s+)?(?:(?:unbuilt|undecided|future|open|retired)\s+)*(?:target\s+direction|open\s+decision|retired(?:\s+(.+?))?)[.!?]?$/i.exec(text);
+    if (match) {
+      const topicWords = tokenizeWords(match[1]).filter((word) => !TOPIC_FUNCTION_WORDS.has(word));
+      return topicWords.length > 0 &&
+        topicWords.every((word) => topicGroundedTokens.has(word)) &&
+        isCleanAbstentionComplement(match[1]) &&
+        (match[2] === undefined || isCleanAbstentionComplement(match[2]));
+    }
+  }
+
+  return false;
+}
+
+function validateCompleteSubjectScopeClause(clause, { allowAnaphoricIt = false, category = null, topicGroundedTokens = new Set() } = {}) {
+  const re = allowAnaphoricIt ? ABSTENTION_ANAPHORIC_SUBJECT_TAIL_RE : ABSTENTION_EXPLICIT_SUBJECT_TAIL_RE;
+  const match = re.exec(clause.trim());
+  if (!match) return false;
+  return validateCompleteScopePredicateTail(match[1], { category, topicGroundedTokens });
+}
+
+function validateCompleteImpersonalAbsenceClause(clause) {
+  let match = ABSTENTION_THERE_ABSENCE_CLAUSE_RE.exec(clause.trim());
+  if (match) return match[1] === undefined || isCleanAbstentionComplement(match[1]);
+
+  match = ABSTENTION_BARE_ABSENCE_CLAUSE_RE.exec(clause.trim());
+  if (match) {
+    const tail = match[1] ?? match[2] ?? match[3];
+    return tail === undefined || isCleanAbstentionComplement(tail);
+  }
+  return false;
+}
+
 function addGroundedTokenVariants(target, token, forbiddenTokens) {
   if (!token || forbiddenTokens.has(token) || !/^[a-z0-9]+$/.test(token) || /^\d{2,}$/.test(token)) return;
   target.add(token);
@@ -581,13 +698,13 @@ function splitAbstentionClauses(sentence) {
   }
   const clauses = [];
   for (const rawSegment of sentence.split(ABSTENTION_CLAUSE_HARD_PIVOT_RE)) {
-    const segment = rawSegment.trim();
+    const segment = rawSegment.trim().replace(/,+$/, "").trim();
     if (!segment) continue;
     const coordRe = /,?\s*\b(?:and|or|so|for|nor)\b\s+|,\s+/gi;
     let start = 0;
     let match;
     while ((match = coordRe.exec(segment)) !== null) {
-      const left = segment.slice(start, match.index).trim();
+      const left = segment.slice(start, match.index).trim().replace(/,+$/, "").trim();
       const right = segment.slice(match.index + match[0].length).trim();
       const immediateRight = right.split(/,?\s*\b(?:and|or|so|for|nor)\b\s+|,\s+/i)[0]?.trim() ?? "";
       const leftHasNegatedModal = /\b(?:cannot|can't|does\s+not|do\s+not|will\s+not|won't|must\s+not|may\s+not|unable\s+to|not\s+(?:able|permitted|allowed|authorized|configured)\s+to)\b/i.test(left);
@@ -643,15 +760,18 @@ export function verifyAbstentionAnswer(answer, context = {}) {
   if (trimmed.length > 420) {
     return { valid: false, reason: "excessive_abstention_length" };
   }
-  if (!ABSTENTION_ALLOWED_CHARS_RE.test(trimmed)) {
+  if (!ABSTENTION_ALLOWED_CHARS_RE.test(trimmed) || !hasBalancedQuotes(trimmed)) {
     return { valid: false, reason: "unvalidated_characters_in_abstention" };
+  }
+  const { allowedTokens, topicGroundedTokens } = buildGroundedAbstentionTokens(context);
+  if (!validateAbstentionParentheses(trimmed, topicGroundedTokens)) {
+    return { valid: false, reason: "unconstrained_parenthetical_in_abstention" };
   }
   if (ABSTENTION_DISALLOWED_CONTENT_RE.test(trimmed) ||
       ABSTENTION_DOUBLE_NEGATION_RE.test(trimmed) ||
       ABSTENTION_EMBEDDED_CLAIM_RE.test(trimmed)) {
     return { valid: false, reason: "substantive_or_sensitive_content_in_abstention" };
   }
-  const { allowedTokens, topicGroundedTokens } = buildGroundedAbstentionTokens(context);
   const sentences = trimmed
     .split(/(?<=[.!?])\s+|\r?\n+/)
     .map((sentence) => sentence.trim())
@@ -671,18 +791,19 @@ export function verifyAbstentionAnswer(answer, context = {}) {
       if (ABSTENTION_BUILTIN_GUIDANCE_SENTENCE_RE.test(clause)) {
         continue;
       }
-      if (ABSTENTION_EXPLICIT_SUBJECT_SCOPE_RE.test(clause)) {
+      const scopeCtx = { category: context.category ?? null, topicGroundedTokens };
+      if (validateCompleteSubjectScopeClause(clause, { allowAnaphoricIt: false, ...scopeCtx })) {
         sentenceHasExplicitGuideOrCorpusSubject = true;
         hasExplicitSubjectPrior = true;
         continue;
       }
-      if (hasExplicitSubjectPrior && ABSTENTION_ANAPHORIC_SUBJECT_SCOPE_RE.test(clause)) {
+      if (hasExplicitSubjectPrior && validateCompleteSubjectScopeClause(clause, { allowAnaphoricIt: true, ...scopeCtx })) {
         continue;
       }
-      if (clauseIndex > 0 && sentenceHasExplicitGuideOrCorpusSubject && ABSTENTION_NEGATIVE_VP_CONTINUATION_RE.test(clause)) {
+      if (clauseIndex > 0 && sentenceHasExplicitGuideOrCorpusSubject && validateCompleteScopePredicateTail(clause, scopeCtx)) {
         continue;
       }
-      if (ABSTENTION_IMPERSONAL_ABSENCE_CLAUSE_RE.test(clause)) {
+      if (validateCompleteImpersonalAbsenceClause(clause)) {
         continue;
       }
       if (context.category !== "boundary_refusal" && topicGroundedTokens.size > 0) {

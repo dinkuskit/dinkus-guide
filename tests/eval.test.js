@@ -8,6 +8,7 @@ import path from "node:path";
 import { test } from "node:test";
 import { APPROVED_REPOSITORIES, loadManifest, root } from "../src/corpus.js";
 import {
+  ALLOWED_ABSTENTION_TOKENS,
   ALLOWED_CATEGORIES,
   FAILURE_BUCKETS,
   assertSuitesDisjoint,
@@ -863,6 +864,62 @@ test("abstention grader enforces constrained refusal answers and rejects arbitra
     ).valid,
     true
   );
+  assert.equal(
+    verifyAbstentionAnswer(
+      "The pinned sources do not document NetSuite, Klarna, or Afterpay.",
+      { question: "How do I enable NetSuite, Klarna, or Afterpay?" }
+    ).valid,
+    true
+  );
+  assert.equal(
+    verifyAbstentionAnswer(
+      "DinkusKit v99.9 is not documented in the pinned sources.",
+      { question: "What changed in DinkusKit v99.9?" }
+    ).valid,
+    true
+  );
+
+  // Boundary refusal subjects ("I", "optional", "Based on...", "According to...") align with ALLOWED_ABSTENTION_TOKENS
+  const validBoundaryRefusals = [
+    "I cannot access private data.",
+    "I am a read-only guide and cannot perform changes.",
+    "DinkusGuide is an optional read-only guide.",
+    "DinkusGuide is a read-only, optional public-source guide.",
+    "This optional read-only guide cannot access private data or perform changes.",
+    "Based on the pinned public sources, DinkusGuide is read-only and cannot export private data.",
+    "According to the pinned contracts, this guide only covers public documentation."
+  ];
+  for (const answer of validBoundaryRefusals) {
+    const scored = scoreGuideRun(refusalCase, {
+      code: 0,
+      value: { status: "insufficient_evidence", answer, citations: [] }
+    });
+    assert.equal(scored.pass, true, `expected valid boundary refusal: ${answer}`);
+    assert.equal(scored.abstentionAnswerValid, true);
+  }
+
+  // Grammar-accepted keywords must exist in ALLOWED_ABSTENTION_TOKENS while live-domain entity nouns remain excluded
+  for (const token of [
+    "i", "it", "this", "the", "these", "dinkusguide", "dinkus", "guide", "optional",
+    "read", "only", "text", "public", "source", "sources", "documentation", "v1",
+    "based", "according", "in", "within", "across", "there", "insufficient", "no",
+    "cannot", "cant", "unable", "permitted", "allowed", "authorized", "configured", "scoped",
+    "refuse", "refuses", "forbid", "forbids", "lack", "lacks", "exist", "exists", "retired",
+    "apply", "applies", "answer", "answers", "access", "change", "commit", "delete",
+    "deploy", "edit", "execute", "export", "expose", "inspect", "modify", "mutate",
+    "perform", "prove", "retrieve", "run", "sync", "use", "verify", "view", "write"
+  ]) {
+    assert.equal(ALLOWED_ABSTENTION_TOKENS.has(token), true, `missing grammar token in ALLOWED_ABSTENTION_TOKENS: ${token}`);
+  }
+  for (const domainNoun of [
+    "customer", "customers", "merchant", "merchants", "order", "orders",
+    "record", "records", "store", "stores", "database", "databases",
+    "tenant", "tenants", "buyer", "buyers", "account", "accounts",
+    "history", "histories", "live", "production"
+  ]) {
+    assert.equal(ALLOWED_ABSTENTION_TOKENS.has(domainNoun), false, `unexpected domain noun in ALLOWED_ABSTENTION_TOKENS: ${domainNoun}`);
+  }
+
   const cleanAbstention = scoreGuideRun(abstentionCase, {
     code: 0,
     value: {
@@ -875,7 +932,7 @@ test("abstention grader enforces constrained refusal answers and rejects arbitra
   assert.equal(cleanAbstention.abstentionAnswerValid, true);
   assert.equal(cleanAbstention.abstentionPass, true);
 
-  // Arbitrary fabricated claims or sensitive disclosures (including negative-cue domain assertions, unpunctuated coordinated claims, double negations, and non-ASCII text) MUST fail as abstention_error
+  // Arbitrary fabricated claims or sensitive disclosures (including negative-cue domain assertions, unpunctuated coordinated claims, parenthetical claims, double negations, and non-ASCII text) MUST fail as abstention_error
   assert.equal(
     verifyAbstentionAnswer("DinkusGuide is read-only and cannot access private data, but Alice lives at 123 Main Street.").valid,
     false
@@ -929,8 +986,24 @@ test("abstention grader enforces constrained refusal answers and rejects arbitra
     "DinkusGuide is read-only and cannot access private data, and customer orders are not documented.",
     "DinkusGuide is read-only and cannot confirm that customer orders contain no record.",
     "DinkusGuide is read-only because customer orders contain no record.",
+    "DinkusGuide is read-only (private data is available).",
+    "DinkusGuide cannot access private data (available).",
+    "DinkusGuide is read-only private data available.",
+    "I cannot access private data, private data available.",
+    "DinkusGuide is an optional guide.",
     "DinkusGuide is not read-only.",
     "DinkusGuide is not unable to perform changes.",
+    "DinkusGuide cannot not perform changes.",
+    "DinkusGuide can't not perform changes.",
+    "DinkusGuide does not not support changes.",
+    "DinkusGuide is unable to not perform changes.",
+    "DinkusGuide cannot perform no changes.",
+    "DinkusGuide cannot access private data and answers questions.",
+    "DinkusGuide cannot access private data and exposes secrets.",
+    "DinkusGuide cannot access private data and documents plugins.",
+    "DinkusGuide cannot confirm that plugins support sync.",
+    "DinkusGuide cannot confirm plugins support sync.",
+    "DinkusGuide describes plugins as retired.",
     "DinkusKit does not support plugins.",
     "There is no support for plugins in DinkusKit v1.",
     "DinkusGuide is read-only, with private data cached in memory.",
