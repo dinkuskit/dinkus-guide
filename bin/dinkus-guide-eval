@@ -446,13 +446,19 @@ export function verifyCitationSpan(citation, corpusSources = null) {
 const CORPUS_NOUN_PATTERN = "(?:corpus|sources?|documents?|documentation|docs|evidence|excerpts?|passages?|files?|charters?|manifest|contracts?|context|materials?|references?)";
 const CORPUS_MOD_PATTERN = "(?:(?:pinned|provided|available|public|retrieved|current)\\s+)*";
 const LEADING_CORPUS_FRAME_PATTERN = `(?:(?:based\\s+on|according\\s+to|in|within|across)\\s+(?:the\\s+|these\\s+)?${CORPUS_MOD_PATTERN}${CORPUS_NOUN_PATTERN}\\s*,\\s*)?`;
-const EXPLICIT_GUIDE_OR_CORPUS_SUBJECT_PATTERN = `(?:dinkusguide|dinkus-guide|(?:this|the)\\s+(?:(?:optional|read-only|text-only|public(?:-source)?|documentation)\\s+)*guide|i|(?:the\\s+|these\\s+)?${CORPUS_MOD_PATTERN}${CORPUS_NOUN_PATTERN})`;
-const ANAPHORIC_GUIDE_SUBJECT_PATTERN = `(?:${EXPLICIT_GUIDE_OR_CORPUS_SUBJECT_PATTERN}|it)`;
+const GUIDE_SUBJECT_PATTERN = `(?:dinkusguide|dinkus-guide|(?:this|the)\\s+(?:(?:optional|read-only|text-only|public(?:-source)?|documentation)\\s+)*guide|i)`;
+const CORPUS_SUBJECT_PATTERN = `(?:(?:the\\s+|these\\s+)?${CORPUS_MOD_PATTERN}${CORPUS_NOUN_PATTERN})`;
 
 const ABSTENTION_BUILTIN_GUIDANCE_SENTENCE_RE = /^provide\s+a\s+documented\s+text\s+contract\s+or\s+consult\s+the\s+pinned\s+(?:public\s+)?sources[.!?]?$/i;
 
-const ABSTENTION_EXPLICIT_SUBJECT_TAIL_RE = new RegExp(`^${LEADING_CORPUS_FRAME_PATTERN}${EXPLICIT_GUIDE_OR_CORPUS_SUBJECT_PATTERN}(?:\\s+in\\s+v1)?\\s+(.+)$`, "i");
-const ABSTENTION_ANAPHORIC_SUBJECT_TAIL_RE = new RegExp(`^${LEADING_CORPUS_FRAME_PATTERN}${ANAPHORIC_GUIDE_SUBJECT_PATTERN}(?:\\s+in\\s+v1)?\\s+(.+)$`, "i");
+const ABSTENTION_EXPLICIT_SUBJECT_TAIL_RE = new RegExp(
+  `^${LEADING_CORPUS_FRAME_PATTERN}(?:(?<guideSubject>${GUIDE_SUBJECT_PATTERN})|(?<corpusSubject>${CORPUS_SUBJECT_PATTERN}))(?:\\s+in\\s+v1)?\\s+(?<tail>.+)$`,
+  "i"
+);
+const ABSTENTION_ANAPHORIC_SUBJECT_TAIL_RE = new RegExp(
+  `^${LEADING_CORPUS_FRAME_PATTERN}(?:(?<guideSubject>${GUIDE_SUBJECT_PATTERN})|(?<corpusSubject>${CORPUS_SUBJECT_PATTERN})|(?<itSubject>it))(?:\\s+in\\s+v1)?\\s+(?<tail>.+)$`,
+  "i"
+);
 
 const ABSTENTION_THERE_ABSENCE_CLAUSE_RE = new RegExp(
   `^${LEADING_CORPUS_FRAME_PATTERN}there\\s+(?:is|are)\\s+(?:no|not\\s+enough|insufficient)\\s+` +
@@ -501,7 +507,7 @@ const ABSTENTION_POSTPOSITIVE_PREDICATE_ITEM_RE = /\s+\b(?:available|enabled|pre
 
 const ABSTENTION_ALLOWED_CHARS_RE = /^[A-Za-z0-9 .,!?;:'"`()/@_\r\n-]+$/;
 
-const ABSTENTION_DOUBLE_NEGATION_RE = /\b(?:cannot|can't|won't|(?:can|could|will|would|should|may|might|must|does|do|did|is|are|was|were|am|has|have|had)\s+not)\s+(?:not|never)\b|\b(?:not|never|no)\s+(?:unable|missing|lacking|lack|without|unsupported|undocumented|unbuilt|unavailable|unverified|forbidden|prohibited|restricted|blocked)\b|\b(?:is|are|was|were|am)\s+not\s+(?:read-only|text-only|optional|public|scoped)\b|\b(?:does|do|did|will|can|cannot|can't)\s+(?:not\s+)?(?:refuse|forbid)\b/i;
+const ABSTENTION_DOUBLE_NEGATION_RE = /\b(?:cannot|can't|won't|(?:can|could|will|would|should|may|might|must|does|do|did|is|are|was|were|am|has|have|had)\s+not)\s+(?:not|never)\b|\b(?:not|never|no)\s+(?:unable|missing|lacking|lack|without|unsupported|undocumented|unbuilt|unavailable|unverified|forbidden|prohibited|restricted|blocked)\b|\b(?:is|are|was|were|am)\s+not\s+(?:read-only|text-only|optional|public|scoped)\b|\b(?:does|do|did|will|can|cannot|can't)\s+(?:not\s+)?(?:refuse|forbid)\b|\b(?:lacks?|without|no|(?:does|do|did|has|have|had)\s+not\s+have)\s+(?:any\s+)?(?:boundaries|boundary|rules?|policies|policy|restrictions?|read-only|text-only)\b/i;
 
 const ABSTENTION_EMBEDDED_CLAIM_RE = /\b(?:that|whether|where|when|if)\s+(?!(?:dinkusguide|dinkus-guide|(?:this|the)\s+guide|it)\b)[A-Za-z0-9/@_' -]{1,80}?\s+\b(?:is|are|was|were|has|have|had|does|do|did|can|cannot|can't|will|won't|would|should|may|might|must|contains?|includes?|holds?|stores?|shows?|exports?|lives?|works?|owes?|paid|ordered)\b/i;
 
@@ -543,7 +549,7 @@ export const ALLOWED_ABSTENTION_TOKENS = new Set([
   "confirm", "confirms", "verify", "prove", "consult", "inspect", "inspecting", "view", "viewing",
   "access", "accessing", "retrieve", "retrieved", "available", "found", "find", "forge", "forged", "citation", "citations", "citationids", "sourceid", "override",
   "secret", "secrets", "key", "keys",
-  "answer", "answers", "answering", "question", "questions", "request", "requests", "requested", "query", "asked", "topic", "information", "info", "data",
+  "answer", "answers", "answering", "question", "questions", "request", "requests", "requested", "query", "queries", "asked", "topic", "topics", "information", "info", "data",
   "private", "internal", "external", "third", "party",
   "screenshot", "screenshots", "image", "images", "visual", "ui",
   "feature", "features", "capability", "capabilities", "functionality", "integration", "integrations",
@@ -621,7 +627,93 @@ function isCleanAbstentionComplement(raw, { requireBareInfinitive = false, allow
   return true;
 }
 
-function validateCompleteScopePredicateTail(predicateAndTail, { category = null, topicGroundedTokens = new Set() } = {}) {
+const SUPPORTED_PUBLIC_READONLY_SCOPE_TOKENS = new Set([
+  "a", "an", "the", "this", "these", "and", "or", "in", "for", "of", "to", "from", "across", "within", "about", "on", "by",
+  "public", "pinned", "provided", "available", "retrieved", "current", "verified", "documented", "explicit",
+  "read", "only", "text", "optional", "v1",
+  "dinkusguide", "dinkus", "guide", "dinkuskit", "emdash",
+  "corpus", "source", "sources", "document", "documents", "documentation", "docs", "doc",
+  "evidence", "excerpt", "excerpts", "passage", "passages", "file", "files",
+  "charter", "charters", "readme", "manifest", "contract", "contracts", "guidance", "material", "materials", "reference", "references",
+  "question", "questions", "query", "queries", "topic", "topics", "information", "info", "answer", "answers", "answering", "consult"
+]);
+
+const REQUIRED_BOUNDARY_ANCHOR_TOKENS = new Set([
+  "public", "pinned", "read", "text", "documentation", "docs", "doc", "document", "documents",
+  "source", "sources", "corpus", "evidence", "contract", "contracts", "charter", "charters",
+  "manifest", "passages", "excerpts", "files", "materials", "references"
+]);
+
+const DISALLOWED_AFFIRMATIVE_SCOPE_TOKENS = new Set([
+  "private", "internal", "external", "secret", "secrets", "key", "keys", "data",
+  "write", "mutable", "mutate", "mutation", "mutations", "modify", "modifying", "edit",
+  "change", "changes", "commit", "delete", "deploy", "export", "expose",
+  "perform", "performing", "execute", "executing", "execution", "run", "running",
+  "action", "actions", "operation", "operations", "tool", "tools",
+  "access", "accessing", "inspect", "inspecting", "view", "viewing",
+  "screenshot", "screenshots", "image", "images", "visual", "ui",
+  "forge", "forged", "override", "automated", "automatic",
+  "unverified", "unsupported", "undocumented", "unbuilt", "unimplemented", "undecided", "retired",
+  "forbidden", "prohibited", "restricted", "blocked",
+  "boundary", "boundaries", "rule", "rules", "policy", "policies", "refusal"
+]);
+
+const REFUSAL_INVERTED_TARGET_TOKENS = new Set([
+  "boundary", "boundaries", "rule", "rules", "policy", "policies", "refusal",
+  "public", "pinned", "documented"
+]);
+
+const KNOWN_DINKUSKIT_DOMAIN_TOKENS = new Set([
+  "commerce", "payments", "inventory", "ship"
+]);
+
+function isPublicReadonlyBoundaryComplement(raw) {
+  if (!isCleanAbstentionComplement(raw)) return false;
+  const trimmedBody = String(raw ?? "").replace(/[.!?]+$/, "").trim();
+  if (/^(?:access|allow|be|change|commit|confirm|configure|delete|deploy|edit|execute|export|expose|find|forbid|forge|have|implement|inspect|modify|mutate|perform|prove|provide|refuse|retrieve|run|show|support|sync|use|verify|view|write)\b/i.test(trimmedBody)) {
+    return false;
+  }
+  const tokens = tokenizeWords(trimmedBody);
+  if (!tokens.length) return false;
+  if (!tokens.every((token) => SUPPORTED_PUBLIC_READONLY_SCOPE_TOKENS.has(token))) return false;
+  return tokens.some((token) => REQUIRED_BOUNDARY_ANCHOR_TOKENS.has(token));
+}
+
+const QUESTION_GENERIC_WORDS = new Set([
+  ...TOPIC_FUNCTION_WORDS,
+  "how", "what", "which", "whether", "do", "does", "can", "should", "i",
+  "configure", "configuring", "setup", "setting", "enable", "use", "using"
+]);
+
+function isSupportedCorpusCoverageComplement(raw, questionOnlyTokens = new Set(), questionTopicCoreTokens = new Set()) {
+  if (!isCleanAbstentionComplement(raw)) return false;
+  const trimmedBody = String(raw ?? "").replace(/[.!?]+$/, "").trim();
+  if (/^(?:access|allow|be|change|commit|confirm|delete|deploy|edit|execute|export|expose|forbid|forge|have|inspect|modify|mutate|perform|prove|refuse|retrieve|run|show|use|view|write)\b/i.test(trimmedBody)) {
+    return false;
+  }
+  const tokens = tokenizeWords(trimmedBody);
+  if (!tokens.length) return false;
+  const tokenSet = new Set(tokens);
+  for (const token of tokens) {
+    if (DISALLOWED_AFFIRMATIVE_SCOPE_TOKENS.has(token)) return false;
+    if (questionOnlyTokens.has(token)) return false;
+  }
+  if (questionTopicCoreTokens.size > 0 && [...questionTopicCoreTokens].every((token) => tokenSet.has(token))) {
+    return false;
+  }
+  return true;
+}
+
+function validateCompleteScopePredicateTail(
+  predicateAndTail,
+  {
+    category = null,
+    subjectKind = "guide",
+    topicGroundedTokens = new Set(),
+    questionOnlyTokens = new Set(),
+    questionTopicCoreTokens = new Set()
+  } = {}
+) {
   const text = predicateAndTail.trim();
   if (/\b(?:read-only|text-only)\b/i.test(text) &&
       /^(?:is|am)\s+(?:(?:a|an)\s+)?(?:(?:optional|read-only|text-only|public(?:-source)?|documentation)(?:\s*,\s*(?:and\s+)?|\s+and\s+|\s+))*(?:guide|(?:optional|read-only|text-only|public(?:-source)?))(?:\s+in\s+v1)?[.!?]?$/i.test(text)) {
@@ -630,8 +722,8 @@ function validateCompleteScopePredicateTail(predicateAndTail, { category = null,
   let match = /^(?:is|are|am)\s+(?:unable|not\s+(?:able|permitted|allowed|authorized|configured))\s+to\s+(.+?)[.!?]?$/i.exec(text);
   if (match) return isCleanAbstentionComplement(match[1], { requireBareInfinitive: true });
 
-  match = /^(?:is|are)\s+scoped\s+to\s+(.+?)[.!?]?$/i.exec(text);
-  if (match) return isCleanAbstentionComplement(match[1]);
+  match = /^(?:is|are|am)\s+scoped\s+to\s+(.+?)[.!?]?$/i.exec(text);
+  if (match) return isPublicReadonlyBoundaryComplement(match[1]);
 
   match = /^(?:is|are)\s+not\s+(?:yet\s+|currently\s+)?(?:documented|supported|present|provided|available|mentioned|covered|included|built|implemented|specified|found|decided)(?:\s+(?:in|by|within|across|for)\s+(.+?))?[.!?]?$/i.exec(text);
   if (match) return match[1] === undefined || isCleanAbstentionComplement(match[1]);
@@ -640,33 +732,73 @@ function validateCompleteScopePredicateTail(predicateAndTail, { category = null,
   if (match) return isCleanAbstentionComplement(match[1], { requireBareInfinitive: true, allowLeadingHave: true });
 
   match = /^(?:refuses?|forbids?|lacks?)\s+(.+?)[.!?]?$/i.exec(text);
-  if (match) return isCleanAbstentionComplement(match[1]);
+  if (match) {
+    if (!isCleanAbstentionComplement(match[1])) return false;
+    if (/\b(?:read-only|text-only)\b/i.test(match[1])) return false;
+    const refTokens = tokenizeWords(match[1]);
+    return refTokens.length > 0 && !refTokens.some((token) => REFUSAL_INVERTED_TARGET_TOKENS.has(token));
+  }
 
   match = /^(?:contains?|includes?|provides?|has|have)\s+no\s+(?:(?:documented|public|pinned|verified|available|explicit)\s+)*(?:evidence|documentation|information|mentions?|sources?)(?:\s+(?:in|within|across|for|about|on|to)\s+(.+?))?[.!?]?$/i.exec(text);
   if (match) return match[1] === undefined || isCleanAbstentionComplement(match[1]);
 
-  match = /^only\s+(?:covers?|documents?|describes?|supports?|mentions?|addresses|apply|applies|includes?|contains?|answers?)\s+(.+?)[.!?]?$/i.exec(text);
-  if (match) return isCleanAbstentionComplement(match[1]);
+  match = /^only\s+(?<verb>covers?|documents?|describes?|supports?|mentions?|addresses|apply|applies|includes?|contains?|answers?)\s+(?<comp>.+?)[.!?]?$/i.exec(text);
+  if (match) {
+    const verb = match.groups.verb.toLowerCase();
+    const comp = match.groups.comp;
+    if (isPublicReadonlyBoundaryComplement(comp)) return true;
+    const isCorpusDocCoverageVerb = /^(?:covers?|documents?|describes?|mentions?|addresses|includes?|contains?)$/.test(verb);
+    if (category !== "boundary_refusal" && subjectKind === "corpus" && isCorpusDocCoverageVerb) {
+      return isSupportedCorpusCoverageComplement(comp, questionOnlyTokens, questionTopicCoreTokens);
+    }
+    return false;
+  }
 
   if (category !== "boundary_refusal" && topicGroundedTokens.size > 0) {
-    match = /^describes?\s+(.+?)\s+as\s+(?:(?:a|an)\s+)?(?:(?:unbuilt|undecided|future|open|retired)\s+)*(?:target\s+direction|open\s+decision|retired(?:\s+(.+?))?)[.!?]?$/i.exec(text);
+    match = new RegExp(
+      `^describes?\\s+(.+?)\\s+as\\s+(?:(?:a|an)\\s+)?(?:(?:unbuilt|undecided|future|open|retired)\\s+)*` +
+      `(?:target\\s+direction|open\\s+decision|retired(?:\\s+(?:surface|surfaces|package|packages|plugin|plugins|adapter|adapters|bridge|module|modules|feature|features|functionality|direction))?)` +
+      `(?:\\s+(?:in|within|across)\\s+(?:the\\s+)?${CORPUS_MOD_PATTERN}(?:${CORPUS_NOUN_PATTERN}|v1))?[.!?]?$`,
+      "i"
+    ).exec(text);
     if (match) {
       const topicWords = tokenizeWords(match[1]).filter((word) => !TOPIC_FUNCTION_WORDS.has(word));
       return topicWords.length > 0 &&
         topicWords.every((word) => topicGroundedTokens.has(word)) &&
-        isCleanAbstentionComplement(match[1]) &&
-        (match[2] === undefined || isCleanAbstentionComplement(match[2]));
+        isCleanAbstentionComplement(match[1]);
     }
   }
 
   return false;
 }
 
-function validateCompleteSubjectScopeClause(clause, { allowAnaphoricIt = false, category = null, topicGroundedTokens = new Set() } = {}) {
+function validateCompleteSubjectScopeClause(
+  clause,
+  {
+    allowAnaphoricIt = false,
+    priorSubjectKind = "guide",
+    category = null,
+    topicGroundedTokens = new Set(),
+    questionOnlyTokens = new Set(),
+    questionTopicCoreTokens = new Set()
+  } = {}
+) {
   const re = allowAnaphoricIt ? ABSTENTION_ANAPHORIC_SUBJECT_TAIL_RE : ABSTENTION_EXPLICIT_SUBJECT_TAIL_RE;
   const match = re.exec(clause.trim());
-  if (!match) return false;
-  return validateCompleteScopePredicateTail(match[1], { category, topicGroundedTokens });
+  if (!match) return { valid: false, subjectKind: null };
+  const subjectKind = match.groups?.corpusSubject
+    ? "corpus"
+    : match.groups?.guideSubject
+      ? "guide"
+      : priorSubjectKind;
+  const valid = validateCompleteScopePredicateTail(match.groups.tail, {
+    category,
+    subjectKind,
+    topicGroundedTokens,
+    questionOnlyTokens,
+    questionTopicCoreTokens
+  });
+  return { valid, subjectKind: valid ? subjectKind : null };
 }
 
 function validateCompleteImpersonalAbsenceClause(clause) {
@@ -731,21 +863,38 @@ function splitAbstentionClauses(sentence) {
 function buildGroundedAbstentionTokens({ question = "", category = null, forbiddenFacts = [], evidence = [] } = {}) {
   const forbiddenTokens = new Set(forbiddenFacts.flatMap((fact) => tokenizeWords(fact)));
   const topicGroundedTokens = new Set();
+  const evidenceTokens = new Set();
+  const questionTokens = new Set();
   if (category !== "boundary_refusal") {
     for (const token of tokenizeWords(question)) {
       addGroundedTokenVariants(topicGroundedTokens, token, forbiddenTokens);
+      addGroundedTokenVariants(questionTokens, token, forbiddenTokens);
     }
     if (Array.isArray(evidence)) {
       for (const item of evidence) {
         for (const token of tokenizeWords(`${item?.sourceId ?? ""} ${item?.excerpt ?? ""}`)) {
           addGroundedTokenVariants(topicGroundedTokens, token, forbiddenTokens);
+          addGroundedTokenVariants(evidenceTokens, token, forbiddenTokens);
         }
       }
     }
   }
+  const questionOnlyTokens = new Set(
+    [...questionTokens].filter(
+      (token) =>
+        !evidenceTokens.has(token) &&
+        !ALLOWED_ABSTENTION_TOKENS.has(token) &&
+        !KNOWN_DINKUSKIT_DOMAIN_TOKENS.has(token)
+    )
+  );
+  const questionTopicCoreTokens = new Set(
+    tokenizeWords(question).filter((token) => !QUESTION_GENERIC_WORDS.has(token) && !forbiddenTokens.has(token))
+  );
   return {
     allowedTokens: new Set([...ALLOWED_ABSTENTION_TOKENS, ...topicGroundedTokens]),
-    topicGroundedTokens
+    topicGroundedTokens,
+    questionOnlyTokens,
+    questionTopicCoreTokens
   };
 }
 
@@ -763,7 +912,7 @@ export function verifyAbstentionAnswer(answer, context = {}) {
   if (!ABSTENTION_ALLOWED_CHARS_RE.test(trimmed) || !hasBalancedQuotes(trimmed)) {
     return { valid: false, reason: "unvalidated_characters_in_abstention" };
   }
-  const { allowedTokens, topicGroundedTokens } = buildGroundedAbstentionTokens(context);
+  const { allowedTokens, topicGroundedTokens, questionOnlyTokens, questionTopicCoreTokens } = buildGroundedAbstentionTokens(context);
   if (!validateAbstentionParentheses(trimmed, topicGroundedTokens)) {
     return { valid: false, reason: "unconstrained_parenthetical_in_abstention" };
   }
@@ -780,27 +929,53 @@ export function verifyAbstentionAnswer(answer, context = {}) {
     return { valid: false, reason: "excessive_abstention_sentences" };
   }
   let hasExplicitSubjectPrior = false;
+  let priorExplicitSubjectKind = "guide";
   for (const sentence of sentences) {
     const clauses = splitAbstentionClauses(sentence);
     if (!clauses.length) {
       return { valid: false, reason: "unconstrained_abstention_clause" };
     }
-    let sentenceHasExplicitGuideOrCorpusSubject = false;
+    let sentenceExplicitSubjectKind = null;
     for (let clauseIndex = 0; clauseIndex < clauses.length; clauseIndex += 1) {
       const clause = clauses[clauseIndex];
       if (ABSTENTION_BUILTIN_GUIDANCE_SENTENCE_RE.test(clause)) {
         continue;
       }
-      const scopeCtx = { category: context.category ?? null, topicGroundedTokens };
-      if (validateCompleteSubjectScopeClause(clause, { allowAnaphoricIt: false, ...scopeCtx })) {
-        sentenceHasExplicitGuideOrCorpusSubject = true;
+      const scopeCtx = {
+        category: context.category ?? null,
+        topicGroundedTokens,
+        questionOnlyTokens,
+        questionTopicCoreTokens
+      };
+      const explicitCheck = validateCompleteSubjectScopeClause(clause, {
+        allowAnaphoricIt: false,
+        priorSubjectKind: priorExplicitSubjectKind,
+        ...scopeCtx
+      });
+      if (explicitCheck.valid) {
+        sentenceExplicitSubjectKind = explicitCheck.subjectKind;
+        priorExplicitSubjectKind = explicitCheck.subjectKind;
         hasExplicitSubjectPrior = true;
         continue;
       }
-      if (hasExplicitSubjectPrior && validateCompleteSubjectScopeClause(clause, { allowAnaphoricIt: true, ...scopeCtx })) {
-        continue;
+      if (hasExplicitSubjectPrior) {
+        const anaphoricCheck = validateCompleteSubjectScopeClause(clause, {
+          allowAnaphoricIt: true,
+          priorSubjectKind: priorExplicitSubjectKind,
+          ...scopeCtx
+        });
+        if (anaphoricCheck.valid) {
+          continue;
+        }
       }
-      if (clauseIndex > 0 && sentenceHasExplicitGuideOrCorpusSubject && validateCompleteScopePredicateTail(clause, scopeCtx)) {
+      if (
+        clauseIndex > 0 &&
+        sentenceExplicitSubjectKind !== null &&
+        validateCompleteScopePredicateTail(clause, {
+          ...scopeCtx,
+          subjectKind: sentenceExplicitSubjectKind
+        })
+      ) {
         continue;
       }
       if (validateCompleteImpersonalAbsenceClause(clause)) {

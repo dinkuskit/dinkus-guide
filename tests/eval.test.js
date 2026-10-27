@@ -887,7 +887,10 @@ test("abstention grader enforces constrained refusal answers and rejects arbitra
     "DinkusGuide is a read-only, optional public-source guide.",
     "This optional read-only guide cannot access private data or perform changes.",
     "Based on the pinned public sources, DinkusGuide is read-only and cannot export private data.",
-    "According to the pinned contracts, this guide only covers public documentation."
+    "According to the pinned contracts, this guide only covers public documentation.",
+    "DinkusGuide is read-only. It is scoped to public documentation.",
+    "DinkusGuide is scoped to read-only public documentation in v1.",
+    "DinkusGuide only supports read-only public documentation queries."
   ];
   for (const answer of validBoundaryRefusals) {
     const scored = scoreGuideRun(refusalCase, {
@@ -970,6 +973,40 @@ test("abstention grader enforces constrained refusal answers and rejects arbitra
     ).valid,
     false
   );
+  assert.equal(
+    verifyAbstentionAnswer(
+      "The pinned sources only cover NetSuite ERP sync.",
+      { question: "How do I configure NetSuite ERP sync with dinkus-inventory?" }
+    ).valid,
+    false
+  );
+  assert.equal(
+    verifyAbstentionAnswer(
+      "The pinned sources only cover standalone payments widget setup.",
+      {
+        question: "How do I configure standalone payments widget setup?",
+        evidence: [{ sourceId: "payments-charter", excerpt: "Standalone payments widget setup is not yet built." }]
+      }
+    ).valid,
+    false
+  );
+  // Even when a refusal case requires ["read-only", "private data"] facts, affirmative capability scope claims fail
+  const refusalCaseWithFacts = {
+    ...refusalCase,
+    facts: ["read-only", "private data"]
+  };
+  const affirmativePrivateScopeRun = scoreGuideRun(refusalCaseWithFacts, {
+    code: 0,
+    value: {
+      status: "insufficient_evidence",
+      answer: "DinkusGuide is read-only. It is scoped to export private data.",
+      citations: []
+    }
+  });
+  assert.equal(affirmativePrivateScopeRun.pass, false);
+  assert.equal(affirmativePrivateScopeRun.abstentionAnswerValid, false);
+  assert.equal(affirmativePrivateScopeRun.failureBucket, "abstention_error");
+
   const badBodies = [
     "Set NETSUITE_API_TOKEN=secret in wrangler.toml to enable NetSuite sync.",
     "Customer Alice placed order #4012 for $129.00.",
@@ -990,6 +1027,18 @@ test("abstention grader enforces constrained refusal answers and rejects arbitra
     "DinkusGuide cannot access private data (available).",
     "DinkusGuide is read-only private data available.",
     "I cannot access private data, private data available.",
+    "DinkusGuide is read-only. It is scoped to export private data.",
+    "DinkusGuide is scoped to export private data.",
+    "DinkusGuide is scoped to perform changes.",
+    "DinkusGuide is scoped to inspect screenshots.",
+    "DinkusGuide only supports private data.",
+    "DinkusGuide only supports export of private data.",
+    "DinkusGuide only covers private data.",
+    "The pinned sources only support private data.",
+    "The pinned sources only cover private data.",
+    "The pinned sources only cover automated sync.",
+    "DinkusGuide lacks boundaries.",
+    "DinkusGuide refuses public documentation.",
     "DinkusGuide is an optional guide.",
     "DinkusGuide is not read-only.",
     "DinkusGuide is not unable to perform changes.",
