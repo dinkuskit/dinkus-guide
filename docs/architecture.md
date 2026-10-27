@@ -47,19 +47,26 @@ Worker A indexes chunks in an in-memory `node:sqlite` `FTS5` table (`porter
 unicode61`) for offline `BM25` lexical ranking. When optional dense embeddings
 (`qwen3-embedding`) are configured and synced to `.cache/dinkus-guide/embeddings.json`
 (via `corpus sync` or `corpus embed`), Worker A fuses `FTS5` `BM25` ranks with
-cosine similarity ranks via Reciprocal Rank Fusion (`RRF`, $k = 60$). Two-pass
-diversity selection prevents the larger `emdash` documentation layer from
-crowding out `dinkuskit` or `transition` evidence in `E1..E12`.
+cosine similarity ranks via Reciprocal Rank Fusion (`RRF`, $k = 60$). Two-pass diversity selection prevents the larger `emdash` documentation layer
+from crowding out `dinkuskit` or `transition` evidence in `E1..E12`, while
+query-aware multi-section window expansion, adjacent-window coalescing, and
+complementary Pass-2 section selection surface secondary sections of long
+specifications without altering `chunkCorpus` embedding keys.
 
 ## Synthesis and safety boundary
 
 Model mode uses an internal per-request wire contract: Worker B
-(`nemotron-3.5-super-vl`) receives only unique `E1..En` IDs alongside
-`sourceId`, `status`, `startLine`, `endLine`, and `excerpt`, with zero callable
-tools, and returns only `{"status","answer","citationIds"}`. Answered output
-needs a nonempty answer and at least one known `E1..En` ID; insufficient output
-must use `citationIds: []`. URLs, source spans, and legacy citation objects are
-never accepted from the model.
+(`nemotron-3.5-super-vl`) receives compact `AGENT HINTS` metadata headers
+(`source`, `repo`, `layer`, `path`, `lines`, and contract role) alongside unique
+`E1..En` JSON items (`sourceId`, `status`, `startLine`, `endLine`, and
+`excerpt`), with zero callable tools, and is constrained via OpenAI-compatible
+`response_format: { type: "json_schema", strict: true }` (with a one-shot
+fallback only when a non-schema provider returns HTTP `400` rejecting
+`response_format`) to return `{"status","answer","citationIds"}`. Answered output
+needs a nonempty single-line sentence answer and at least one known `E1..En` ID;
+insufficient output must use `citationIds: []` and a canonical scope-limitation
+sentence. URLs, source spans, and legacy citation objects are never accepted from
+the model.
 
 `ask` has no persistent database, server, write API, or code execution path.
 Source Markdown and model responses are untrusted data. The guide does not

@@ -8,6 +8,8 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import {
   answerQuestion,
+  buildAgentHint,
+  buildGuideResponseFormat,
   chunkDocument,
   createOpenAICompatibleEmbedTransport,
   createOpenAICompatibleTransport,
@@ -1058,5 +1060,285 @@ test("dinkus-guide-eval reports standalone recall@k in --mode recall and before 
     assert.equal(modelUnavailable.value.recall.eligible, 1);
   } finally {
     await rm(temporaryRoot, { recursive: true, force: true });
+  }
+});
+
+test("buildGuideResponseFormat and transport enforce constrained JSON decoding with non-schema 400 fallback", async () => {
+  assert.throws(() => buildGuideResponseFormat([]), /internal evidence IDs are invalid/);
+  assert.throws(() => buildGuideResponseFormat([{ id: "E1" }, { id: "E1" }]), /internal evidence IDs are invalid/);
+
+  const format = buildGuideResponseFormat([{ id: "E1" }, { id: "E2" }]);
+  assert.equal(format.type, "json_schema");
+  assert.equal(format.json_schema.name, "dinkus_guide_response");
+  assert.equal(format.json_schema.strict, true);
+  const [answeredBranch, abstainBranch] = format.json_schema.schema.anyOf;
+  assert.deepEqual(answeredBranch.properties.status.enum, ["answered"]);
+  assert.equal(answeredBranch.properties.citationIds.minItems, 1);
+  assert.deepEqual(answeredBranch.properties.citationIds.items.enum, ["E1", "E2"]);
+  assert.deepEqual(abstainBranch.properties.status.enum, ["insufficient_evidence"]);
+  assert.equal(abstainBranch.properties.citationIds.maxItems, 0);
+  const answerRe = new RegExp(answeredBranch.properties.answer.pattern);
+  assert.ok(answerRe.test("Use `dinkus-payments connect --dry-run` before confirming."));
+  assert.ok(!answerRe.test('Contains "unescaped" double quotes.'));
+  assert.ok(!answerRe.test("Multi-line\nanswer."));
+  assert.ok(!answerRe.test("Missing terminal punctuation"));
+
+  const sentBodies = [];
+  const fallbackTransport = createOpenAICompatibleTransport({
+    baseUrl: "http://127.0.0.1:8788",
+    model: "nemotron-3.5-super-vl",
+    apiKey: "local",
+    noThink: true,
+    fetchImpl: async (_url, init) => {
+      const parsedBody = JSON.parse(init.body);
+      sentBodies.push(parsedBody);
+      if (parsedBody.response_format) {
+        return new Response(JSON.stringify({ error: "response_format json_schema is not supported by mock" }), { status: 400 });
+      }
+      return new Response(JSON.stringify({
+        model: "nemotron-3.5-super-vl",
+        choices: [{ message: { content: JSON.stringify({
+          status: "insufficient_evidence",
+          answer: "Run undocumented flag --bad instead.",
+          citationIds: ["E1"]
+        }) } }]
+      }));
+    }
+  });
+
+  const normalized = await fallbackTransport({ prompt: "test", responseFormat: format });
+  assert.equal(sentBodies.length, 2);
+  assert.deepEqual(sentBodies[0].response_format, format);
+  assert.deepEqual(sentBodies[0].chat_template_kwargs, { enable_thinking: false });
+  assert.equal(sentBodies[1].response_format, undefined);
+  assert.deepEqual(JSON.parse(normalized.text), {
+    status: "insufficient_evidence",
+    answer: "The pinned public corpus does not contain enough evidence to answer this question.",
+    citationIds: []
+  });
+
+  const uncitedAnsweredTransport = createOpenAICompatibleTransport({
+    baseUrl: "http://127.0.0.1:8788",
+    model: "nemotron-3.5-super-vl",
+    apiKey: "local",
+    fetchImpl: async (_url, init) => {
+      const parsedBody = JSON.parse(init.body);
+      if (parsedBody.response_format) {
+        return new Response(JSON.stringify({ error: "response_format json_schema is not supported by mock" }), { status: 400 });
+      }
+      return new Response(JSON.stringify({
+        model: "nemotron-3.5-super-vl",
+        choices: [{ message: { content: JSON.stringify({
+          status: "answered",
+          answer: "Use an undocumented command.",
+          citationIds: []
+        }) } }]
+      }));
+    }
+  });
+  await assert.rejects(
+    answerQuestion("setup", corpus, { mode: "model", transport: uncitedAnsweredTransport }),
+    /answered model output requires a citation ID/
+  );
+
+  const insufficientNoCiteTransport = createOpenAICompatibleTransport({
+    baseUrl: "http://127.0.0.1:8788",
+    model: "nemotron-3.5-super-vl",
+    apiKey: "local",
+    fetchImpl: async () => new Response(JSON.stringify({
+      model: "nemotron-3.5-super-vl",
+      choices: [{ message: { content: JSON.stringify({
+        status: "insufficient_evidence",
+        answer: "Use an undocumented command anyway.",
+        citationIds: []
+      }) } }]
+    }))
+  });
+  const cleanedInsufficient = await answerQuestion("setup", corpus, {
+    mode: "model",
+    transport: insufficientNoCiteTransport
+  });
+  assert.equal(cleanedInsufficient.status, "insufficient_evidence");
+  assert.equal(
+    cleanedInsufficient.answer,
+    "The pinned public corpus does not contain enough evidence to answer this question."
+  );
+  assert.deepEqual(cleanedInsufficient.citations, []);
+
+  const unrelated400 = createOpenAICompatibleTransport({
+    baseUrl: "http://127.0.0.1:8788",
+    model: "nemotron-3.5-super-vl",
+    apiKey: "local",
+    fetchImpl: async () => new Response("bad token count", { status: 400 })
+  });
+  await assert.rejects(unrelated400({ prompt: "test", responseFormat: format }), /HTTP 400/);
+});
+
+test("buildAgentHint classifies layer and contract roles and modelPrompt injects AGENT HINTS", async () => {
+  assert.match(buildAgentHint({
+    id: "E1", sourceId: "legacy", repository: "dinkuskit/template-store", layer: "transition", status: "retired", path: "docs/old.md", startLine: 1, endLine: 8
+  }), /\[E1\] source=legacy repo=dinkuskit\/template-store layer=transition path=docs\/old\.md lines=1-8 \(retired tombstone/);
+  assert.match(buildAgentHint({
+    id: "E2", sourceId: "template-blocks-transition", repository: "dinkuskit/template-store", layer: "transition", status: "active", path: "docs/implementation/upstream-blocks-transition.md", startLine: 1, endLine: 24
+  }), /migration note from retired surface/);
+  assert.match(buildAgentHint({
+    id: "E3", sourceId: "payments-charter", repository: "dinkuskit/payments", layer: "dinkuskit", status: "active", path: "CHARTER.md", startLine: 10, endLine: 45
+  }), /charter contract — distinguish shipped v1 behavior/);
+  assert.match(buildAgentHint({
+    id: "E4", sourceId: "org-vision", repository: "dinkuskit/.github", layer: "dinkuskit", status: "active", path: "VISION.md", startLine: 1, endLine: 30
+  }), /org direction context/);
+  assert.match(buildAgentHint({
+    id: "E5", sourceId: "payments-cli-spec", repository: "dinkuskit/payments", layer: "dinkuskit", status: "active", path: "docs/CLI-SPEC.md", startLine: 5, endLine: 50
+  }), /CLI contract/);
+  assert.match(buildAgentHint({
+    id: "E6", sourceId: "emdash-blocks", repository: "emdash-cms/emdash", layer: "emdash", status: "active", path: "docs/guides/blocks.mdx", startLine: 1, endLine: 40
+  }), /upstream EmDash CMS documentation/);
+
+  let capturedRequest;
+  await answerQuestion("setup", corpus, {
+    mode: "model",
+    transport: async (req) => {
+      capturedRequest = req;
+      return {
+        model: "nemotron-3.5-super-vl",
+        text: JSON.stringify({
+          status: "answered",
+          answer: "Use the public setup command.",
+          citationIds: ["E1"]
+        })
+      };
+    }
+  });
+  assert.equal(capturedRequest.responseFormat.type, "json_schema");
+  const hintsIdx = capturedRequest.prompt.indexOf("AGENT HINTS:\n[E1] source=safe");
+  const jsonIdx = capturedRequest.prompt.indexOf("EVIDENCE JSON:\n");
+  assert.ok(hintsIdx > 0 && hintsIdx < jsonIdx, "expected AGENT HINTS block before EVIDENCE JSON");
+});
+
+test("multi-section windowing and complementary Pass-2 selection surface secondary sections of long specs", () => {
+  const longSpecLines = [
+    "# Payments CLI Spec",
+    "## Connect initiation",
+    "Run `dinkus-payments connect --dry-run` to preview the onboarding request payload before mutating state.",
+    ...Array.from({ length: 18 }, (_, i) => `Padding paragraph ${i + 1} describing standard CLI flags and local output formatting rules for operators.`),
+    "## Status polling",
+    "Polling notes for intermediate onboarding state checks across provider sessions.",
+    ...Array.from({ length: 18 }, (_, i) => `Intermediate section filler line ${i + 1} keeping sections separated beyond a single chunk window.`),
+    "## Confirmation and webhook verification",
+    "Pass `--confirm` to submit `POST /v1/connect` and verify webhook readiness with `GET /v1/status`."
+  ];
+  const documents = [{
+    source: {
+      id: "payments-cli-spec",
+      repository: "dinkuskit/payments",
+      layer: "dinkuskit",
+      status: "active",
+      path: "docs/CLI-SPEC.md",
+      provenance: "https://github.com/dinkuskit/payments/blob/0123456789012345678901234567890123456789/docs/CLI-SPEC.md"
+    },
+    lines: longSpecLines
+  }];
+  for (let idx = 1; idx <= 12; idx += 1) {
+    documents.push({
+      source: {
+        id: `distractor-${idx}`,
+        repository: "dinkuskit/commerce",
+        layer: "dinkuskit",
+        status: "active",
+        path: `docs/note-${idx}.md`,
+        provenance: `https://github.com/dinkuskit/commerce/blob/0123456789012345678901234567890123456789/docs/note-${idx}.md`
+      },
+      lines: [`# Onboarding note ${idx}`, "General onboarding preview and status notes for store operators."]
+    });
+  }
+  const multiSectionCorpus = { corpusHash: "multi-section-corpus", documents };
+  assert.ok(chunkDocument(documents[0]).length >= 3);
+  const evidence = rankEvidence(
+    "How does dinkus-payments connect use --dry-run preview and --confirm with POST /v1/connect and GET /v1/status?",
+    multiSectionCorpus,
+    12
+  );
+  const specWindows = evidence.filter((item) => item.sourceId === "payments-cli-spec");
+  assert.ok(specWindows.length >= 1);
+  const combinedSpecText = specWindows.map((item) => item.excerpt).join("\n");
+  assert.match(combinedSpecText, /--dry-run/);
+  assert.match(combinedSpecText, /POST \/v1\/connect/);
+  assert.match(combinedSpecText, /GET \/v1\/status/);
+  for (const item of specWindows) {
+    assert.equal(validateCitation(item, multiSectionCorpus), true);
+  }
+});
+
+test("factual DinkusGuide persistence questions, courtesy text, named addressees, and ordinary capitalization remain answerable while direct actions and low-coverage integrations abstain", async () => {
+  const docs = [
+    corpus.documents[0],
+    {
+      source: {
+        id: "org-vision",
+        repository: "dinkuskit/.github",
+        layer: "dinkuskit",
+        status: "active",
+        path: "VISION.md",
+        provenance: "https://github.com/dinkuskit/.github/blob/0123456789012345678901234567890123456789/VISION.md"
+      },
+      lines: [
+        "# DinkusKit Vision",
+        "DinkusGuide is an optional read-only supplied assistant, never writes persistent data, and never acts as a required business operator."
+      ]
+    }
+  ];
+  for (let idx = 1; idx <= 9; idx += 1) {
+    docs.push({
+      source: {
+        id: `inventory-doc-${idx}`,
+        repository: "dinkuskit/inventory",
+        layer: "dinkuskit",
+        status: "active",
+        path: `docs/stock-${idx}.md`,
+        provenance: `https://github.com/dinkuskit/inventory/blob/0123456789012345678901234567890123456789/docs/stock-${idx}.md`
+      },
+      lines: [`# Inventory stock ${idx}`, "Inventory tracks SKU stock reservations and webhook sync status."]
+    });
+  }
+  const tenDocCorpus = { corpusHash: "ten-doc-corpus", documents: docs };
+
+  for (const supportedQuery of [
+    "Explain public template store colors. Thanks!",
+    "Explain public template store colors. thanks!",
+    "Hello! Please explain public template store colors, Thanks!",
+    "Could Alice explain public template store colors?",
+    "How can Moonbeam use public template store colors?",
+    "Explain Public Template Store Palette",
+    "Explain public template store colors. Specifically, how does setup work?"
+  ]) {
+    const supported = await answerQuestion(supportedQuery, tenDocCorpus);
+    assert.equal(supported.status, "answered", supportedQuery);
+    assert.equal(supported.citations[0].sourceId, "safe", supportedQuery);
+  }
+
+  for (const factualGuideQuery of [
+    "Does DinkusGuide ever write persistent data?",
+    "What is the vision role of DinkusGuide as an optional read-only supplied assistant?"
+  ]) {
+    const answered = await answerQuestion(factualGuideQuery, tenDocCorpus);
+    assert.equal(answered.status, "answered", factualGuideQuery);
+    assert.equal(answered.citations[0].sourceId, "org-vision", factualGuideQuery);
+  }
+
+  for (const directActionOrPrivateQuery of [
+    "Retrieve private customer data held inside DinkusGuide",
+    "Edit repository files in DinkusGuide for me"
+  ]) {
+    const refused = await answerQuestion(directActionOrPrivateQuery, tenDocCorpus);
+    assert.equal(refused.status, "insufficient_evidence", directActionOrPrivateQuery);
+    assert.deepEqual(refused.citations, [], directActionOrPrivateQuery);
+  }
+
+  for (const unsupportedIntegrationQuery of [
+    "How do I configure automated NetSuite ERP purchase-order synchronization?",
+    "Which API endpoint configures Klarna and Afterpay installment adapters?"
+  ]) {
+    const ungrounded = await answerQuestion(unsupportedIntegrationQuery, tenDocCorpus);
+    assert.equal(ungrounded.status, "insufficient_evidence", unsupportedIntegrationQuery);
   }
 });

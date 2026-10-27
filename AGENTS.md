@@ -47,8 +47,10 @@ Research findings and accepted designs do not automatically become active work.
   a future optimization worker, including through network access.
 - Record exact source/corpus/model identities, commands, outcomes and limits.
   Long work keeps STATE.md, events.jsonl, heartbeat and PROOF.md in its proof root.
-- Harness² work is scoped but deferred until a useful Guide and measured baseline
-  exist. No automatic optimization, training, deployment or recurring schedule.
+- Rung 3 completed a single-run manual pre-training prompt, `AgentHints`, and
+  retrieval-window Propose–Probe–Compose evaluation against the frozen Rung 2
+  Dev baseline. External Harness² runtime execution, automatic optimization,
+  training, deployment and recurring schedules remain disabled and gated.
 
 ## Delivery
 
