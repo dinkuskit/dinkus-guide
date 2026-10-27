@@ -19,4 +19,19 @@ No corpus, retrieval, model prompts, evaluator or source admission changes. No p
 
 The default service launcher remains uninstalled and disabled. Its fixed CLI runner is tested for option separation and child cancellation; real-model HTTP proof uses an explicitly injected controlled transport to the existing supported Guide CLI. It does not prove a deployed service, TLS ingress, an installed EmDash plugin or production availability.
 
-Current-source external review and CI are pending. Merge and rollout: WAITING_FOR_HUMAN.
+## Review repair
+
+Native review of `344a7c55b07cdb6a1c8b676edc38ea9574e575db` found that the
+option-boundary CLI test inherited provider configuration. Accepted as a
+required repair: the test now supplies only `PATH`, following the existing CLI
+tests. This prevents a configured operator checkout from making model calls
+and keeps its expected error independent of installed credentials. The focused
+tests also pass with synthetic provider/embedding environment canaries set.
+No findings were rejected. Comprehensive review of that original head was clean;
+new-head CI and both review results are maintained in the linked PR.
+
+Jev classification for that publication used the rubric by hand: both duplicate
+Before-merge boxes were `repair` / actionable. The available Jev route was hosted;
+the assignment excludes paid inference, so no hosted judge call was made.
+
+Merge and rollout: WAITING_FOR_HUMAN.

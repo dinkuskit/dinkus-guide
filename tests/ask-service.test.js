@@ -122,7 +122,9 @@ test("global rate cap cannot be reset with visitor identifiers", async (t) => {
 
 test("CLI -- preserves leading option-looking questions as data", () => {
   const result = spawnSync(process.execPath, [new URL("../bin/dinkus-guide", import.meta.url).pathname,
-    "ask", "--json", "--mode", "model", "--", "--version"], { encoding: "utf8" });
+    "ask", "--json", "--mode", "model", "--", "--version"], {
+    encoding: "utf8", env: { PATH: process.env.PATH }
+  });
   assert.notEqual(result.status, 0);
   const parsed = JSON.parse(result.stdout);
   assert.equal(parsed.status, "error");
