@@ -1,5 +1,5 @@
 {
-  "evaluatedSourceHead": "893d2ca677b5259632c9668002317bdd31139ff5",
+  "evaluatedSourceHead": "9484b54a38c23b4cdd4d456ce1d33d0fa14aad76",
   "baseSha": "9efdaebf02980a5d2f3b493f595a2033e7873217",
   "corpusHash": "2bc34f2be1c0d91d2e5ee2a1acf5ba466e67ae11bdfe379214107b45d32835b2",
   "sources": 164,
@@ -212,16 +212,16 @@
       "mode": "retrieval",
       "retrieval": "hybrid-rrf-qwen3-embedding",
       "modelIdentity": null,
-      "passed": 33,
+      "passed": 34,
       "total": 56,
-      "score": 0.5892857142857143,
+      "score": 0.6071428571428571,
       "sourceHits": 56,
       "eligible": 56,
       "sourceRecallAtK": 1,
-      "spanHits": 33,
-      "recallAtK": 0.5892857142857143,
+      "spanHits": 34,
+      "recallAtK": 0.6071428571428571,
       "failureBuckets": {
-        "retrieval_miss": 23,
+        "retrieval_miss": 22,
         "schema_error": 0,
         "abstention_error": 0,
         "citation_miss": 0,
@@ -231,11 +231,11 @@
       "byCategory": {
         "lookup": {
           "total": 18,
-          "passed": 8,
-          "failed": 10,
-          "score": 0.4444444444444444,
+          "passed": 9,
+          "failed": 9,
+          "score": 0.5,
           "failureBuckets": {
-            "retrieval_miss": 10,
+            "retrieval_miss": 9,
             "schema_error": 0,
             "abstention_error": 0,
             "citation_miss": 0,
@@ -293,34 +293,34 @@
       "mode": "extractive",
       "retrieval": "hybrid-rrf-qwen3-embedding",
       "modelIdentity": null,
-      "passed": 47,
+      "passed": 48,
       "total": 75,
-      "score": 0.6266666666666667,
+      "score": 0.64,
       "sourceHits": 56,
       "eligible": 56,
       "sourceRecallAtK": 1,
-      "spanHits": 33,
-      "recallAtK": 0.5892857142857143,
+      "spanHits": 34,
+      "recallAtK": 0.6071428571428571,
       "failureBuckets": {
         "retrieval_miss": 0,
         "schema_error": 0,
         "abstention_error": 5,
         "citation_miss": 0,
-        "fact_miss": 23
+        "fact_miss": 22
       },
       "forbiddenClaims": 0,
       "byCategory": {
         "lookup": {
           "total": 18,
-          "passed": 8,
-          "failed": 10,
-          "score": 0.4444444444444444,
+          "passed": 9,
+          "failed": 9,
+          "score": 0.5,
           "failureBuckets": {
             "retrieval_miss": 0,
             "schema_error": 0,
             "abstention_error": 0,
             "citation_miss": 0,
-            "fact_miss": 10
+            "fact_miss": 9
           }
         },
         "workflow": {
@@ -402,47 +402,47 @@
       "modelIdentity": [
         "nemotron-3.5-super-vl"
       ],
-      "passed": 39,
+      "passed": 42,
       "total": 75,
-      "score": 0.52,
+      "score": 0.56,
       "sourceHits": 56,
       "eligible": 56,
       "sourceRecallAtK": 1,
-      "spanHits": 33,
-      "recallAtK": 0.5892857142857143,
+      "spanHits": 34,
+      "recallAtK": 0.6071428571428571,
       "failureBuckets": {
         "retrieval_miss": 0,
-        "schema_error": 4,
-        "abstention_error": 5,
-        "citation_miss": 3,
-        "fact_miss": 24
+        "schema_error": 8,
+        "abstention_error": 4,
+        "citation_miss": 1,
+        "fact_miss": 20
       },
       "forbiddenClaims": 2,
       "byCategory": {
         "lookup": {
           "total": 18,
-          "passed": 8,
-          "failed": 10,
-          "score": 0.4444444444444444,
+          "passed": 9,
+          "failed": 9,
+          "score": 0.5,
           "failureBuckets": {
             "retrieval_miss": 0,
-            "schema_error": 2,
+            "schema_error": 3,
             "abstention_error": 0,
             "citation_miss": 0,
-            "fact_miss": 8
+            "fact_miss": 6
           }
         },
         "workflow": {
           "total": 15,
-          "passed": 5,
-          "failed": 10,
-          "score": 0.3333333333333333,
+          "passed": 6,
+          "failed": 9,
+          "score": 0.4,
           "failureBuckets": {
             "retrieval_miss": 0,
-            "schema_error": 1,
-            "abstention_error": 1,
+            "schema_error": 3,
+            "abstention_error": 0,
             "citation_miss": 0,
-            "fact_miss": 8
+            "fact_miss": 6
           }
         },
         "transition_trap": {
@@ -460,14 +460,14 @@
         },
         "cross_plugin": {
           "total": 13,
-          "passed": 6,
-          "failed": 7,
-          "score": 0.46153846153846156,
+          "passed": 7,
+          "failed": 6,
+          "score": 0.5384615384615384,
           "failureBuckets": {
             "retrieval_miss": 0,
-            "schema_error": 0,
+            "schema_error": 1,
             "abstention_error": 0,
-            "citation_miss": 3,
+            "citation_miss": 1,
             "fact_miss": 4
           }
         },
@@ -922,9 +922,9 @@
       "modelIdentity": [
         "nemotron-3.5-super-vl"
       ],
-      "passed": 16,
+      "passed": 17,
       "total": 28,
-      "score": 0.5714285714285714,
+      "score": 0.6071428571428571,
       "sourceHits": 21,
       "eligible": 22,
       "sourceRecallAtK": 0.9545454545454546,
@@ -932,8 +932,8 @@
       "recallAtK": 0.6363636363636364,
       "failureBuckets": {
         "retrieval_miss": 1,
-        "schema_error": 4,
-        "abstention_error": 0,
+        "schema_error": 2,
+        "abstention_error": 1,
         "citation_miss": 1,
         "fact_miss": 6
       },
@@ -941,12 +941,12 @@
       "byCategory": {
         "lookup": {
           "total": 7,
-          "passed": 4,
-          "failed": 3,
-          "score": 0.5714285714285714,
+          "passed": 5,
+          "failed": 2,
+          "score": 0.7142857142857143,
           "failureBuckets": {
             "retrieval_miss": 0,
-            "schema_error": 2,
+            "schema_error": 1,
             "abstention_error": 0,
             "citation_miss": 0,
             "fact_miss": 1
@@ -998,8 +998,8 @@
           "score": 0.6666666666666666,
           "failureBuckets": {
             "retrieval_miss": 0,
-            "schema_error": 1,
-            "abstention_error": 0,
+            "schema_error": 0,
+            "abstention_error": 1,
             "citation_miss": 0,
             "fact_miss": 0
           }
