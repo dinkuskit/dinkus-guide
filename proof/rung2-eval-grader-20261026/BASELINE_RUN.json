@@ -1,5 +1,5 @@
 {
-  "evaluatedSourceHead": "de0959c68cae04154b496f378b35841266564158",
+  "evaluatedSourceHead": "11b6573f71d9ea7271b2235096997f0bd1460e0f",
   "baseSha": "9efdaebf02980a5d2f3b493f595a2033e7873217",
   "corpusHash": "2bc34f2be1c0d91d2e5ee2a1acf5ba466e67ae11bdfe379214107b45d32835b2",
   "sources": 164,
@@ -402,9 +402,9 @@
       "modelIdentity": [
         "nemotron-3.5-super-vl"
       ],
-      "passed": 39,
+      "passed": 40,
       "total": 75,
-      "score": 0.52,
+      "score": 0.5333333333333333,
       "sourceHits": 56,
       "eligible": 56,
       "sourceRecallAtK": 1,
@@ -412,10 +412,10 @@
       "recallAtK": 0.5892857142857143,
       "failureBuckets": {
         "retrieval_miss": 0,
-        "schema_error": 4,
-        "abstention_error": 6,
-        "citation_miss": 3,
-        "fact_miss": 23
+        "schema_error": 9,
+        "abstention_error": 4,
+        "citation_miss": 2,
+        "fact_miss": 20
       },
       "forbiddenClaims": 2,
       "byCategory": {
@@ -439,10 +439,10 @@
           "score": 0.4,
           "failureBuckets": {
             "retrieval_miss": 0,
-            "schema_error": 1,
+            "schema_error": 4,
             "abstention_error": 1,
             "citation_miss": 0,
-            "fact_miss": 7
+            "fact_miss": 4
           }
         },
         "transition_trap": {
@@ -452,23 +452,23 @@
           "score": 0.6,
           "failureBuckets": {
             "retrieval_miss": 0,
-            "schema_error": 0,
+            "schema_error": 1,
             "abstention_error": 0,
             "citation_miss": 0,
-            "fact_miss": 4
+            "fact_miss": 3
           }
         },
         "cross_plugin": {
           "total": 13,
-          "passed": 4,
-          "failed": 9,
-          "score": 0.3076923076923077,
+          "passed": 5,
+          "failed": 8,
+          "score": 0.38461538461538464,
           "failureBuckets": {
             "retrieval_miss": 0,
-            "schema_error": 1,
+            "schema_error": 0,
             "abstention_error": 0,
-            "citation_miss": 3,
-            "fact_miss": 5
+            "citation_miss": 2,
+            "fact_miss": 6
           }
         },
         "honest_abstention": {
@@ -478,8 +478,8 @@
           "score": 0.5,
           "failureBuckets": {
             "retrieval_miss": 0,
-            "schema_error": 0,
-            "abstention_error": 5,
+            "schema_error": 2,
+            "abstention_error": 3,
             "citation_miss": 0,
             "fact_miss": 0
           }
