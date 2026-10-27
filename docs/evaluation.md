@@ -95,10 +95,12 @@ imports ranking or answer functions from `src/`.
      validation (exit code `4`).
    - `abstention_error` — False abstention (`insufficient_evidence` on an
      answerable case), false answer (`answered` on an `abstain: true` case), or
-     an unconstrained `abstain: true` answer body that omits explicit
-     sentence- and clause-level refusal/scope-limitation cues or introduces
-     ungrounded, substantive, procedural, address/PII, URL, code, pricing, or
-     secret-like content (`verifyAbstentionAnswer`).
+     an unconstrained `abstain: true` answer body whose clauses are not
+     subject-anchored guide/corpus scope limitations (or grounded passive
+     documentation/implementation status on non-`boundary_refusal` cases) or
+     that introduces double negations, embedded factual assertions, customer /
+     merchant / order / store claims, procedural guidance, address/PII, URLs,
+     code, pricing, or secret-like content (`verifyAbstentionAnswer`).
    - `citation_miss` — Returned citations had an invalid or out-of-bounds line
      span, or missed a required `sources` / `anyOfSources` group after facts
      passed.

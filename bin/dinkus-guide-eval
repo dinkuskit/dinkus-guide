@@ -443,27 +443,78 @@ export function verifyCitationSpan(citation, corpusSources = null) {
   };
 }
 
-const ABSTENTION_REFUSAL_CUE_RE = /\b(?:cannot|can't|unable\s+to|read-only|text-only|does\s+not\s+(?:contain|include|document|provide|cover|support|specify|describe|mention|have|allow|perform|access|inspect|store|expose)|do\s+not\s+(?:contain|include|document|provide|cover|support|specify|describe|mention|have|allow|perform|access|inspect|store|expose)|not\s+(?:yet\s+|currently\s+)?(?:documented|supported|present|provided|available|mentioned|covered|included|built|implemented|specified|found|permitted|allowed|able)|no\s+(?:documented|documentation|evidence|information|support|record|mention|details|instructions)|insufficient\s+evidence|unverified|unsupported|undocumented|unbuilt|undecided|out\s+of\s+scope|outside\s+the\s+pinned|refuse[sd]?)\b/i;
+const CORPUS_NOUN_PATTERN = "(?:corpus|sources?|documents?|documentation|docs|evidence|excerpts?|passages?|files?|charters?|manifest|contracts?|context|materials?|references?)";
+const CORPUS_MOD_PATTERN = "(?:(?:pinned|provided|available|public|retrieved|current)\\s+)*";
+const LEADING_CORPUS_FRAME_PATTERN = `(?:(?:based\\s+on|according\\s+to|in|within|across)\\s+(?:the\\s+|these\\s+)?${CORPUS_MOD_PATTERN}${CORPUS_NOUN_PATTERN}\\s*,\\s*)?`;
+const EXPLICIT_GUIDE_OR_CORPUS_SUBJECT_PATTERN = `(?:dinkusguide|dinkus-guide|(?:this|the)\\s+(?:(?:read-only|text-only|public(?:-source)?|documentation)\\s+)*guide|i|(?:the\\s+|these\\s+)?${CORPUS_MOD_PATTERN}${CORPUS_NOUN_PATTERN})`;
+const ANAPHORIC_GUIDE_SUBJECT_PATTERN = `(?:${EXPLICIT_GUIDE_OR_CORPUS_SUBJECT_PATTERN}|it)`;
 
-const ABSTENTION_CLAUSE_CUE_RE = /\b(?:cannot|can't|unable\s+to|read-only|text-only|does\s+not|do\s+not|is\s+not|are\s+not|not\s+(?:yet\s+|currently\s+)?(?:documented|supported|present|provided|available|mentioned|covered|included|built|implemented|specified|found|permitted|allowed|able)|no\s+(?:documented|documentation|evidence|information|support|record|mention|details|instructions|public)|insufficient\s+evidence|unverified|unsupported|undocumented|unbuilt|undecided|out\s+of\s+scope|target\s+direction|open\s+decision|outside\s+the\s+pinned|refuse[sd]?|only\s+(?:covers?|documents?|describes?|supports?|mentions?|addresses?|applies|includes?))\b|^provide\s+a\s+documented\s+text\s+contract\s+or\s+consult\s+the\s+pinned\s+(?:public\s+)?sources\.?$/i;
+const ABSTENTION_BUILTIN_GUIDANCE_SENTENCE_RE = /^provide\s+a\s+documented\s+text\s+contract\s+or\s+consult\s+the\s+pinned\s+(?:public\s+)?sources[.!?]?$/i;
 
-const ABSTENTION_CLAUSE_HARD_PIVOT_RE = /[;:—–]|\s--\s|\b(?:but|however|although|though|nevertheless|meanwhile|whereas|while)\b|,\s*yet\b|,\s*instead\b|\binstead\s*,|,\s*except\b|\bexcept\s+that\b/i;
+function makeSubjectScopeClauseRe(allowAnaphoricIt) {
+  const subjectPattern = allowAnaphoricIt ? ANAPHORIC_GUIDE_SUBJECT_PATTERN : EXPLICIT_GUIDE_OR_CORPUS_SUBJECT_PATTERN;
+  return new RegExp(
+    `^${LEADING_CORPUS_FRAME_PATTERN}${subjectPattern}(?:\\s+in\\s+v1)?\\s+` +
+    `(?:is\\s+(?:(?:a|an)\\s+)?(?:(?:optional|read-only|text-only|public(?:-source)?)\\s*,?\\s*(?:and\\s+)?)*(?:read-only|text-only)(?:\\s+(?:documentation\\s+)?guide)?\\b|` +
+    `is\\s+(?:unable\\s+to|not\\s+(?:able|permitted|allowed|authorized|configured)\\s+to|scoped\\s+to)\\b|` +
+    `(?:is|are)\\s+not\\s+(?:yet\\s+|currently\\s+)?(?:documented|supported|present|provided|available|mentioned|covered|included|built|implemented|specified|found|decided)\\b|` +
+    `(?:cannot|can't|will\\s+not|won't|must\\s+not|may\\s+not|does\\s+not|do\\s+not)\\b|` +
+    `(?:refuses?|forbids?|lacks?)\\b|` +
+    `only\\s+(?:covers?|documents?|describes?|supports?|mentions?|addresses?|applies|includes?|contains?|answers?)\\b|` +
+    `describes?\\s+[A-Za-z0-9/@_' -]+?\\s+as\\s+(?:(?:a|an)\\s+)?(?:(?:unbuilt|undecided|future|open|retired)\\s+)*(?:target\\s+direction|open\\s+decision|retired\\b))`,
+    "i"
+  );
+}
 
-const ABSTENTION_AUXILIARY_RE = /\b(?:is|are|was|were|am|be|been|has|have|had|does|do|did|can|cannot|can't|could|will|would|should|may|might|must)\b/i;
+const ABSTENTION_EXPLICIT_SUBJECT_SCOPE_RE = makeSubjectScopeClauseRe(false);
+const ABSTENTION_ANAPHORIC_SUBJECT_SCOPE_RE = makeSubjectScopeClauseRe(true);
 
-const ABSTENTION_FINITE_VERB_RE = /\b(?:is|are|was|were|am|be|been|has|have|had|does|do|did|can|cannot|can't|could|will|would|should|may|might|must|allows?|performs?|executes?|refuses?|forbids?|supports|implements?|contains?|includes?|provides?|covers|describes?|mentions?|specifies|defines?|addresses|discusses|explains?|indicates?|shows?|confirms?|modifies|modify|deletes?|deploys?|exports?|lives?|works?|uses?|runs|resides?|owes?|paid|bought|ordered)\b/i;
+const ABSTENTION_NEGATIVE_VP_CONTINUATION_RE = /^(?:(?:cannot|can't|will\s+not|won't|must\s+not|may\s+not|does\s+not|do\s+not)\b|is\s+(?:unable\s+to|not\s+(?:able|permitted|allowed|authorized|configured)\s+to)\b|(?:is|are)\s+not\s+(?:yet\s+|currently\s+)?(?:documented|supported|present|provided|available|mentioned|covered|included|built|implemented|specified|found|decided)\b|(?:refuses?|forbids?|lacks?)\b|only\s+(?:covers?|documents?|describes?|supports?|mentions?|addresses?|applies|includes?|contains?|answers?)\b)/i;
 
-const ABSTENTION_BARE_INFINITIVE_START_RE = /^(?:access|address|allow|answer|change|commit|confirm|configure|consult|contain|cover|define|delete|deploy|describe|detail|discuss|document|execute|explain|export|expose|find|forbid|implement|include|indicate|inspect|mention|modify|perform|prove|provide|refuse|retrieve|run|show|specify|state|store|support|sync|use|verify|view|write)\b/i;
+const ABSTENTION_IMPERSONAL_ABSENCE_CLAUSE_RE = new RegExp(
+  `^${LEADING_CORPUS_FRAME_PATTERN}(?:` +
+  `there\\s+(?:is|are)\\s+(?:no|not\\s+enough|insufficient)\\s+(?:(?:documented|public|pinned|verified|available|explicit)\\s+)*(?:evidence|documentation|information|mentions?|sources?)\\b|` +
+  `there\\s+(?:is|are)\\s+(?:no|not\\s+enough|insufficient)\\s+(?:documented|public|pinned)\\s+(?:support|details|instructions)\\b|` +
+  `(?:insufficient|no)\\s+(?:(?:documented|public|pinned|verified|available|explicit)\\s+)*(?:evidence|documentation|information)(?:\\s+(?:is|are|exists?)\\b|\\s+(?:in|within|across|for|about|on|to)\\b|[.!?]?$)` +
+  `)`,
+  "i"
+);
+
+const ABSTENTION_PASSIVE_TOPIC_CLAUSE_RE = new RegExp(
+  `^${LEADING_CORPUS_FRAME_PATTERN}(?<topic>[A-Za-z0-9][A-Za-z0-9/@_' -]{0,120}?)\\s+(?:is|are)\\s+` +
+  `(?:not\\s+(?:yet\\s+|currently\\s+)?(?:documented|supported|present|provided|available|mentioned|covered|included|built|implemented|specified|found|decided)|` +
+  `unverified|unsupported|undocumented|unbuilt|undecided|(?:(?:a|an)\\s+)?(?:(?:unbuilt|future)\\s+)?target\\s+direction|(?:an\\s+)?open\\s+decision)` +
+  `(?:\\s+(?:in|by|within|across)\\s+(?:the\\s+)?${CORPUS_MOD_PATTERN}(?:${CORPUS_NOUN_PATTERN}|v1))?[.!?]?$`,
+  "i"
+);
+
+const ABSTENTION_SENSITIVE_TOPIC_HEAD_RE = /\b(?:customers?|buyers?|merchants?|tenants?|accounts?|orders?|databases?|records?|histories|history|stores?|production|data)\s*$/i;
+
+const ABSTENTION_CLAUSE_HARD_PIVOT_RE = /[;:—–]|\s--\s|\b(?:but|however|although|though|nevertheless|meanwhile|whereas|while|because|since|unless)\b|,\s*yet\b|,\s*instead\b|\binstead\s*,|,\s*except\b|\bexcept\s+that\b|,\s*with\b/i;
+
+const ABSTENTION_AUXILIARY_RE = /\b(?:is|are|was|were|am|be|been|has|have|had|does|do|did|can|cannot|can't|could|will|won't|would|should|may|might|must)\b/i;
+
+const ABSTENTION_FINITE_VERB_RE = /\b(?:is|are|was|were|am|be|been|has|have|had|does|do|did|can|cannot|can't|could|will|won't|would|should|may|might|must|allows?|performs?|executes?|refuses?|forbids?|supports|implements?|contains?|includes?|provides?|covers|describes?|mentions?|specifies|specify|defines?|addresses|discusses|explains?|indicates?|shows?|confirms?|modifies|modify|deletes?|deploys?|exports?|lives?|works?|uses?|runs|resides?|owes?|paid|bought|ordered)\b/i;
+
+const ABSTENTION_COORDINATED_VERB_START_RE = /^(?:is|are|was|were|am|be|been|has|have|had|does|do|did|can|cannot|can't|could|will|won't|would|should|may|might|must|allows?|performs?|executes?|refuses?|forbids?|implements?|contains?|includes?|provides?|describes?|specifies|specify|defines?|discusses|explains?|indicates?|shows?|confirms?|modifies|modify|deletes?|deploys?|exports?|lives?|works?|uses?|resides?|owes?|paid|bought|ordered|(?:supports?|covers?|mentions?|addresses|runs?)\s+(?:a|an|the|this|that|these|those|all|any|live|automated|manual|[A-Z]))\b/i;
+
+const ABSTENTION_BARE_INFINITIVE_START_RE = /^(?:access|address|allow|answer|change|commit|confirm|configure|consult|contain|cover|define|delete|deploy|describe|detail|discuss|document|execute|explain|export|expose|find|forbid|forge|implement|include|indicate|inspect|mention|modify|mutate|perform|prove|provide|refuse|retrieve|run|show|specify|state|store|support|sync|use|verify|view|write)\b/i;
 
 const ABSTENTION_ALLOWED_CHARS_RE = /^[A-Za-z0-9 .,!?;:'"`()/@_\r\n-]+$/;
 
+const ABSTENTION_DOUBLE_NEGATION_RE = /\b(?:not|never|no)\s+(?:unable|missing|lacking|lack|without|unsupported|undocumented|unbuilt|unavailable|unverified|forbidden|prohibited|restricted|blocked)\b|\b(?:is|are|was|were)\s+not\s+(?:read-only|text-only|optional|public|scoped)\b|\b(?:does|do|did|will|can)\s+not\s+(?:refuse|forbid)\b/i;
+
+const ABSTENTION_EMBEDDED_CLAIM_RE = /\b(?:that|whether|where|when|if)\s+(?!(?:dinkusguide|dinkus-guide|(?:this|the)\s+guide|it)\b)[A-Za-z0-9/@_' -]{1,80}?\s+\b(?:is|are|was|were|has|have|had|does|do|did|can|cannot|can't|will|won't|would|should|may|might|must|contains?|includes?|holds?|stores?|shows?|exports?|lives?|works?|owes?|paid|ordered)\b/i;
+
 const ABSTENTION_DISALLOWED_CONTENT_RE = /```|https?:\/\/|(?:^|\n)\s*(?:[-*]\s+|\d+[.)]\s+|step\s+\d+\b)|\$\s*\d+|\b[A-Z][A-Z0-9_]{2,}\s*=|\b(?:wrangler|pnpm|npm|npx|curl|git)\s+(?:deploy|secret|push|commit|install|add|exec|run)\b|\b(?:typically\s+you|workaround|try\s+running|here\s+(?:is|are)\s+(?:how|the|your|a\s+sample))\b|\b(?:i\s+(?:have\s+)?(?:deployed|edited|created|deleted|exported|updated|executed|inspected|retrieved)|order\s+#\d+|sk_(?:live|test)_[A-Za-z0-9_]*|whsec_[A-Za-z0-9_]*|ec_pat_[A-Za-z0-9_]*|dk_store_[A-Za-z0-9_]*|Bearer\s+[A-Za-z0-9._-]{6,})\b|\b\d+\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?\s+(?:St(?:reet)?|Ave(?:nue)?|Rd|Road|Blvd|Boulevard|Dr(?:ive)?|Ln|Lane|Way|Ct|Court|Pl(?:ace)?)\b|\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b|\b\d{3}-\d{2}-\d{4}\b/i;
 
+const TOPIC_FUNCTION_WORDS = new Set(["a", "an", "the", "this", "that", "these", "those", "and", "or", "of", "in", "for", "to", "with", "on", "by", "from"]);
+
 const ALLOWED_ABSTENTION_TOKENS = new Set([
-  "a", "an", "the", "this", "that", "these", "those", "it", "its", "they", "their", "them", "there", "here",
-  "which", "what", "whether", "how", "when", "where", "why", "who",
+  "a", "an", "the", "this", "that", "these", "those", "it", "its", "there",
+  "which", "what", "whether", "how",
   "is", "are", "was", "were", "be", "been", "being", "am", "has", "have", "had", "do", "does", "did",
-  "can", "cannot", "cant", "t", "s", "could", "will", "would", "should", "may", "might", "must",
+  "can", "cannot", "cant", "t", "s", "could", "will", "won", "would", "should", "may", "might", "must",
   "not", "no", "none", "nor", "neither", "never", "nothing", "without", "lack", "lacks", "lacking", "missing", "absent", "unavailable", "unknown",
   "in", "on", "at", "to", "for", "of", "from", "by", "with", "within", "into", "onto", "about", "across", "against",
   "among", "around", "as", "before", "after", "between", "beyond", "during", "over", "through", "under", "until", "up", "out", "outside",
@@ -475,7 +526,7 @@ const ALLOWED_ABSTENTION_TOKENS = new Set([
   "dinkusguide", "dinkus", "guide", "dinkuskit", "emdash", "v1", "version", "versions",
   "read", "text", "write", "mutable", "mutation", "mutations", "modify", "modifying", "change", "changes",
   "perform", "performing", "execute", "executing", "execution", "run", "running", "action", "actions", "operation", "operations", "tool", "tools",
-  "unable", "able", "refuse", "refuses", "refused", "refusal", "permitted", "allowed", "allow", "allows",
+  "unable", "able", "refuse", "refuses", "refused", "refusal", "permitted", "allowed", "allow", "allows", "authorized", "configured",
   "forbid", "forbids", "forbidden", "prohibited", "restricted", "blocked",
   "insufficient", "enough", "sufficient", "adequate", "unverified", "verified", "unsupported", "supported", "support", "supports",
   "undocumented", "documented", "document", "documents", "documentation", "docs", "doc",
@@ -489,12 +540,10 @@ const ALLOWED_ABSTENTION_TOKENS = new Set([
   "address", "addresses", "addressed", "discuss", "discusses", "discussed", "detail", "details", "detailed",
   "explain", "explains", "explained", "indicate", "indicates", "indicated", "show", "shows", "shown",
   "confirm", "confirms", "verify", "prove", "consult", "inspect", "inspecting", "view", "viewing",
-  "access", "accessing", "retrieve", "retrieved", "available", "found", "find",
-  "answer", "answering", "question", "questions", "request", "requested", "query", "asked", "topic", "information", "info", "data", "record", "records",
-  "private", "internal", "external", "third", "party", "live", "production", "store", "stores", "storage",
-  "merchant", "merchants", "customer", "customers", "buyer", "buyers", "tenant", "tenants", "account", "accounts",
-  "order", "orders", "history", "database", "export", "delete", "deploy", "deployment", "worker", "workers", "cloudflare",
-  "repository", "repositories", "repo", "branch", "pr", "pull", "commit", "checkout", "button",
+  "access", "accessing", "retrieve", "retrieved", "available", "found", "find", "forge", "forged", "citation", "citations", "citationids", "sourceid", "override",
+  "secret", "secrets", "key", "keys",
+  "answer", "answering", "question", "questions", "request", "requests", "requested", "query", "asked", "topic", "information", "info", "data",
+  "private", "internal", "external", "third", "party",
   "screenshot", "screenshots", "image", "images", "visual", "ui",
   "feature", "features", "capability", "capabilities", "functionality", "integration", "integrations",
   "connector", "connectors", "adapter", "adapters", "bridge", "sync", "synchronization", "cutover", "manual", "automated", "automatic",
@@ -515,7 +564,21 @@ function tokenizeWords(text) {
   return normalizeAbstentionPunctuation(text).toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
 }
 
+function addGroundedTokenVariants(target, token, forbiddenTokens) {
+  if (!token || forbiddenTokens.has(token) || !/^[a-z0-9]+$/.test(token) || /^\d{2,}$/.test(token)) return;
+  target.add(token);
+  if (token.length >= 4 && !token.endsWith("s") && !forbiddenTokens.has(`${token}s`)) {
+    target.add(`${token}s`);
+  } else if (token.length >= 5 && token.endsWith("s") && !token.endsWith("ss")) {
+    const singular = token.slice(0, -1);
+    if (!forbiddenTokens.has(singular)) target.add(singular);
+  }
+}
+
 function splitAbstentionClauses(sentence) {
+  if (ABSTENTION_BUILTIN_GUIDANCE_SENTENCE_RE.test(sentence.trim())) {
+    return [sentence.trim()];
+  }
   const clauses = [];
   for (const rawSegment of sentence.split(ABSTENTION_CLAUSE_HARD_PIVOT_RE)) {
     const segment = rawSegment.trim();
@@ -527,11 +590,17 @@ function splitAbstentionClauses(sentence) {
       const left = segment.slice(start, match.index).trim();
       const right = segment.slice(match.index + match[0].length).trim();
       const immediateRight = right.split(/,?\s*\b(?:and|or|so|for|nor)\b\s+|,\s+/i)[0]?.trim() ?? "";
+      const leftHasNegatedModal = /\b(?:cannot|can't|does\s+not|do\s+not|will\s+not|won't|must\s+not|may\s+not|unable\s+to|not\s+(?:able|permitted|allowed|authorized|configured)\s+to)\b/i.test(left);
       const isSharedInfinitiveVp = !match[0].includes(",") &&
-        /\b(?:and|or)\b/i.test(match[0]) &&
+        /\b(?:or|nor)\b/i.test(match[0]) &&
+        leftHasNegatedModal &&
         ABSTENTION_BARE_INFINITIVE_START_RE.test(immediateRight) &&
         !ABSTENTION_AUXILIARY_RE.test(immediateRight);
-      if (!isSharedInfinitiveVp && ABSTENTION_FINITE_VERB_RE.test(left) && ABSTENTION_FINITE_VERB_RE.test(right)) {
+      const rightStartsCoordinatedPredicate = /\b(?:and|or|so|for|nor)\b/i.test(match[0]) &&
+        ABSTENTION_COORDINATED_VERB_START_RE.test(immediateRight);
+      const rightHasIndependentClause = ABSTENTION_AUXILIARY_RE.test(immediateRight) ||
+        (/\s/.test(immediateRight) && ABSTENTION_FINITE_VERB_RE.test(immediateRight));
+      if (!isSharedInfinitiveVp && ABSTENTION_FINITE_VERB_RE.test(left) && (rightHasIndependentClause || rightStartsCoordinatedPredicate)) {
         clauses.push(left);
         start = match.index + match[0].length;
       }
@@ -543,25 +612,24 @@ function splitAbstentionClauses(sentence) {
 }
 
 function buildGroundedAbstentionTokens({ question = "", category = null, forbiddenFacts = [], evidence = [] } = {}) {
-  const allowed = new Set(ALLOWED_ABSTENTION_TOKENS);
   const forbiddenTokens = new Set(forbiddenFacts.flatMap((fact) => tokenizeWords(fact)));
+  const topicGroundedTokens = new Set();
   if (category !== "boundary_refusal") {
     for (const token of tokenizeWords(question)) {
-      if (!forbiddenTokens.has(token) && /^[a-z0-9]+$/.test(token) && !/^\d{2,}$/.test(token)) {
-        allowed.add(token);
-      }
+      addGroundedTokenVariants(topicGroundedTokens, token, forbiddenTokens);
     }
     if (Array.isArray(evidence)) {
       for (const item of evidence) {
         for (const token of tokenizeWords(`${item?.sourceId ?? ""} ${item?.excerpt ?? ""}`)) {
-          if (!forbiddenTokens.has(token) && /^[a-z0-9]+$/.test(token) && !/^\d{2,}$/.test(token)) {
-            allowed.add(token);
-          }
+          addGroundedTokenVariants(topicGroundedTokens, token, forbiddenTokens);
         }
       }
     }
   }
-  return allowed;
+  return {
+    allowedTokens: new Set([...ALLOWED_ABSTENTION_TOKENS, ...topicGroundedTokens]),
+    topicGroundedTokens
+  };
 }
 
 export function verifyAbstentionAnswer(answer, context = {}) {
@@ -578,12 +646,12 @@ export function verifyAbstentionAnswer(answer, context = {}) {
   if (!ABSTENTION_ALLOWED_CHARS_RE.test(trimmed)) {
     return { valid: false, reason: "unvalidated_characters_in_abstention" };
   }
-  if (ABSTENTION_DISALLOWED_CONTENT_RE.test(trimmed)) {
+  if (ABSTENTION_DISALLOWED_CONTENT_RE.test(trimmed) ||
+      ABSTENTION_DOUBLE_NEGATION_RE.test(trimmed) ||
+      ABSTENTION_EMBEDDED_CLAIM_RE.test(trimmed)) {
     return { valid: false, reason: "substantive_or_sensitive_content_in_abstention" };
   }
-  if (!ABSTENTION_REFUSAL_CUE_RE.test(trimmed)) {
-    return { valid: false, reason: "missing_explicit_refusal_or_abstention_cue" };
-  }
+  const { allowedTokens, topicGroundedTokens } = buildGroundedAbstentionTokens(context);
   const sentences = trimmed
     .split(/(?<=[.!?])\s+|\r?\n+/)
     .map((sentence) => sentence.trim())
@@ -591,16 +659,47 @@ export function verifyAbstentionAnswer(answer, context = {}) {
   if (!sentences.length || sentences.length > 3) {
     return { valid: false, reason: "excessive_abstention_sentences" };
   }
+  let hasExplicitSubjectPrior = false;
   for (const sentence of sentences) {
-    if (!ABSTENTION_CLAUSE_CUE_RE.test(sentence)) {
-      return { valid: false, reason: "unconstrained_abstention_sentence" };
-    }
     const clauses = splitAbstentionClauses(sentence);
-    if (!clauses.length || clauses.some((clause) => !ABSTENTION_CLAUSE_CUE_RE.test(clause))) {
+    if (!clauses.length) {
+      return { valid: false, reason: "unconstrained_abstention_clause" };
+    }
+    let sentenceHasExplicitGuideOrCorpusSubject = false;
+    for (let clauseIndex = 0; clauseIndex < clauses.length; clauseIndex += 1) {
+      const clause = clauses[clauseIndex];
+      if (ABSTENTION_BUILTIN_GUIDANCE_SENTENCE_RE.test(clause)) {
+        continue;
+      }
+      if (ABSTENTION_EXPLICIT_SUBJECT_SCOPE_RE.test(clause)) {
+        sentenceHasExplicitGuideOrCorpusSubject = true;
+        hasExplicitSubjectPrior = true;
+        continue;
+      }
+      if (hasExplicitSubjectPrior && ABSTENTION_ANAPHORIC_SUBJECT_SCOPE_RE.test(clause)) {
+        continue;
+      }
+      if (clauseIndex > 0 && sentenceHasExplicitGuideOrCorpusSubject && ABSTENTION_NEGATIVE_VP_CONTINUATION_RE.test(clause)) {
+        continue;
+      }
+      if (ABSTENTION_IMPERSONAL_ABSENCE_CLAUSE_RE.test(clause)) {
+        continue;
+      }
+      if (context.category !== "boundary_refusal" && topicGroundedTokens.size > 0) {
+        const passiveMatch = ABSTENTION_PASSIVE_TOPIC_CLAUSE_RE.exec(clause);
+        if (passiveMatch?.groups?.topic && !ABSTENTION_SENSITIVE_TOPIC_HEAD_RE.test(passiveMatch.groups.topic.trim())) {
+          const topicWords = tokenizeWords(passiveMatch.groups.topic).filter((word) => !TOPIC_FUNCTION_WORDS.has(word));
+          if (topicWords.length > 0 && topicWords.every((word) => topicGroundedTokens.has(word))) {
+            continue;
+          }
+        }
+      }
       return { valid: false, reason: "unconstrained_abstention_clause" };
     }
   }
-  const allowedTokens = buildGroundedAbstentionTokens(context);
+  if (context.category === "boundary_refusal" && !hasExplicitSubjectPrior) {
+    return { valid: false, reason: "missing_guide_or_corpus_refusal_subject" };
+  }
   const tokens = tokenizeWords(trimmed);
   if (!tokens.length) {
     return { valid: false, reason: "empty_abstention_tokens" };
