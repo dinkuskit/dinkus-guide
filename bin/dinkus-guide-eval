@@ -447,7 +447,15 @@ const ABSTENTION_REFUSAL_CUE_RE = /\b(?:cannot|can't|unable\s+to|read-only|text-
 
 const ABSTENTION_CLAUSE_CUE_RE = /\b(?:cannot|can't|unable\s+to|read-only|text-only|does\s+not|do\s+not|is\s+not|are\s+not|not\s+(?:yet\s+|currently\s+)?(?:documented|supported|present|provided|available|mentioned|covered|included|built|implemented|specified|found|permitted|allowed|able)|no\s+(?:documented|documentation|evidence|information|support|record|mention|details|instructions|public)|insufficient\s+evidence|unverified|unsupported|undocumented|unbuilt|undecided|out\s+of\s+scope|target\s+direction|open\s+decision|outside\s+the\s+pinned|refuse[sd]?|only\s+(?:covers?|documents?|describes?|supports?|mentions?|addresses?|applies|includes?))\b|^provide\s+a\s+documented\s+text\s+contract\s+or\s+consult\s+the\s+pinned\s+(?:public\s+)?sources\.?$/i;
 
-const ABSTENTION_CLAUSE_SPLIT_RE = /[;:—–]|\s--\s|\b(?:but|however|although|though|nevertheless|meanwhile|whereas|while)\b|,\s*yet\b|,\s*instead\b|\binstead\s*,|,\s*except\b|\bexcept\s+that\b|,\s*(?:(?:and|or|so|for|nor)\s+)?(?=[^,.!?]*\b(?:is|are|was|were|be|been|has|have|had|does|do|did|can|could|will|would|should|may|might|must|lives?|works?|uses?|runs?|stores?|supports?|includes?|contains?|provides?|allows?|requires?|enables?|connects?|ships?|charges?|holds?|owes?|paid|bought|ordered|resides?)\b)/i;
+const ABSTENTION_CLAUSE_HARD_PIVOT_RE = /[;:—–]|\s--\s|\b(?:but|however|although|though|nevertheless|meanwhile|whereas|while)\b|,\s*yet\b|,\s*instead\b|\binstead\s*,|,\s*except\b|\bexcept\s+that\b/i;
+
+const ABSTENTION_AUXILIARY_RE = /\b(?:is|are|was|were|am|be|been|has|have|had|does|do|did|can|cannot|can't|could|will|would|should|may|might|must)\b/i;
+
+const ABSTENTION_FINITE_VERB_RE = /\b(?:is|are|was|were|am|be|been|has|have|had|does|do|did|can|cannot|can't|could|will|would|should|may|might|must|allows?|performs?|executes?|refuses?|forbids?|supports|implements?|contains?|includes?|provides?|covers|describes?|mentions?|specifies|defines?|addresses|discusses|explains?|indicates?|shows?|confirms?|modifies|modify|deletes?|deploys?|exports?|lives?|works?|uses?|runs|resides?|owes?|paid|bought|ordered)\b/i;
+
+const ABSTENTION_BARE_INFINITIVE_START_RE = /^(?:access|address|allow|answer|change|commit|confirm|configure|consult|contain|cover|define|delete|deploy|describe|detail|discuss|document|execute|explain|export|expose|find|forbid|implement|include|indicate|inspect|mention|modify|perform|prove|provide|refuse|retrieve|run|show|specify|state|store|support|sync|use|verify|view|write)\b/i;
+
+const ABSTENTION_ALLOWED_CHARS_RE = /^[A-Za-z0-9 .,!?;:'"`()/@_\r\n-]+$/;
 
 const ABSTENTION_DISALLOWED_CONTENT_RE = /```|https?:\/\/|(?:^|\n)\s*(?:[-*]\s+|\d+[.)]\s+|step\s+\d+\b)|\$\s*\d+|\b[A-Z][A-Z0-9_]{2,}\s*=|\b(?:wrangler|pnpm|npm|npx|curl|git)\s+(?:deploy|secret|push|commit|install|add|exec|run)\b|\b(?:typically\s+you|workaround|try\s+running|here\s+(?:is|are)\s+(?:how|the|your|a\s+sample))\b|\b(?:i\s+(?:have\s+)?(?:deployed|edited|created|deleted|exported|updated|executed|inspected|retrieved)|order\s+#\d+|sk_(?:live|test)_[A-Za-z0-9_]*|whsec_[A-Za-z0-9_]*|ec_pat_[A-Za-z0-9_]*|dk_store_[A-Za-z0-9_]*|Bearer\s+[A-Za-z0-9._-]{6,})\b|\b\d+\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?\s+(?:St(?:reet)?|Ave(?:nue)?|Rd|Road|Blvd|Boulevard|Dr(?:ive)?|Ln|Lane|Way|Ct|Court|Pl(?:ace)?)\b|\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b|\b\d{3}-\d{2}-\d{4}\b/i;
 
@@ -495,8 +503,43 @@ const ALLOWED_ABSTENTION_TOKENS = new Set([
   "module", "modules", "service", "services", "system", "systems", "model", "models", "rule", "rules", "policy", "policies", "boundary", "boundaries"
 ]);
 
+function normalizeAbstentionPunctuation(text) {
+  return String(text ?? "")
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/[\u2010-\u2012]/g, "-")
+    .replace(/[\u2013\u2014]/g, " -- ");
+}
+
 function tokenizeWords(text) {
-  return String(text ?? "").toLowerCase().match(/[a-z0-9]+/g) ?? [];
+  return normalizeAbstentionPunctuation(text).toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+}
+
+function splitAbstentionClauses(sentence) {
+  const clauses = [];
+  for (const rawSegment of sentence.split(ABSTENTION_CLAUSE_HARD_PIVOT_RE)) {
+    const segment = rawSegment.trim();
+    if (!segment) continue;
+    const coordRe = /,?\s*\b(?:and|or|so|for|nor)\b\s+|,\s+/gi;
+    let start = 0;
+    let match;
+    while ((match = coordRe.exec(segment)) !== null) {
+      const left = segment.slice(start, match.index).trim();
+      const right = segment.slice(match.index + match[0].length).trim();
+      const immediateRight = right.split(/,?\s*\b(?:and|or|so|for|nor)\b\s+|,\s+/i)[0]?.trim() ?? "";
+      const isSharedInfinitiveVp = !match[0].includes(",") &&
+        /\b(?:and|or)\b/i.test(match[0]) &&
+        ABSTENTION_BARE_INFINITIVE_START_RE.test(immediateRight) &&
+        !ABSTENTION_AUXILIARY_RE.test(immediateRight);
+      if (!isSharedInfinitiveVp && ABSTENTION_FINITE_VERB_RE.test(left) && ABSTENTION_FINITE_VERB_RE.test(right)) {
+        clauses.push(left);
+        start = match.index + match[0].length;
+      }
+    }
+    const tail = segment.slice(start).trim();
+    if (tail) clauses.push(tail);
+  }
+  return clauses;
 }
 
 function buildGroundedAbstentionTokens({ question = "", category = null, forbiddenFacts = [], evidence = [] } = {}) {
@@ -504,14 +547,14 @@ function buildGroundedAbstentionTokens({ question = "", category = null, forbidd
   const forbiddenTokens = new Set(forbiddenFacts.flatMap((fact) => tokenizeWords(fact)));
   if (category !== "boundary_refusal") {
     for (const token of tokenizeWords(question)) {
-      if (!forbiddenTokens.has(token) && !/^\d{2,}$/.test(token)) {
+      if (!forbiddenTokens.has(token) && /^[a-z0-9]+$/.test(token) && !/^\d{2,}$/.test(token)) {
         allowed.add(token);
       }
     }
     if (Array.isArray(evidence)) {
       for (const item of evidence) {
         for (const token of tokenizeWords(`${item?.sourceId ?? ""} ${item?.excerpt ?? ""}`)) {
-          if (!forbiddenTokens.has(token) && !/^\d{2,}$/.test(token)) {
+          if (!forbiddenTokens.has(token) && /^[a-z0-9]+$/.test(token) && !/^\d{2,}$/.test(token)) {
             allowed.add(token);
           }
         }
@@ -525,12 +568,15 @@ export function verifyAbstentionAnswer(answer, context = {}) {
   if (typeof answer !== "string") {
     return { valid: false, reason: "missing_abstention_answer" };
   }
-  const trimmed = answer.trim();
+  const trimmed = normalizeAbstentionPunctuation(answer).trim();
   if (!trimmed) {
     return { valid: false, reason: "empty_abstention_answer" };
   }
   if (trimmed.length > 420) {
     return { valid: false, reason: "excessive_abstention_length" };
+  }
+  if (!ABSTENTION_ALLOWED_CHARS_RE.test(trimmed)) {
+    return { valid: false, reason: "unvalidated_characters_in_abstention" };
   }
   if (ABSTENTION_DISALLOWED_CONTENT_RE.test(trimmed)) {
     return { valid: false, reason: "substantive_or_sensitive_content_in_abstention" };
@@ -549,16 +595,17 @@ export function verifyAbstentionAnswer(answer, context = {}) {
     if (!ABSTENTION_CLAUSE_CUE_RE.test(sentence)) {
       return { valid: false, reason: "unconstrained_abstention_sentence" };
     }
-    const clauses = sentence
-      .split(ABSTENTION_CLAUSE_SPLIT_RE)
-      .map((clause) => clause.trim())
-      .filter(Boolean);
-    if (clauses.some((clause) => !ABSTENTION_CLAUSE_CUE_RE.test(clause))) {
+    const clauses = splitAbstentionClauses(sentence);
+    if (!clauses.length || clauses.some((clause) => !ABSTENTION_CLAUSE_CUE_RE.test(clause))) {
       return { valid: false, reason: "unconstrained_abstention_clause" };
     }
   }
   const allowedTokens = buildGroundedAbstentionTokens(context);
-  for (const token of tokenizeWords(trimmed)) {
+  const tokens = tokenizeWords(trimmed);
+  if (!tokens.length) {
+    return { valid: false, reason: "empty_abstention_tokens" };
+  }
+  for (const token of tokens) {
     if (!allowedTokens.has(token)) {
       return { valid: false, reason: "ungrounded_abstention_content" };
     }
@@ -776,7 +823,7 @@ if (isMainModule()) {
   const suitePath = options.suite
     ? path.resolve(process.cwd(), options.suite)
     : path.join(root, "eval", "cases.json");
-  const suiteFile = sanitizeSuiteLabel(suitePath, { redactExternal: options.summaryOnly });
+  let suiteFile = sanitizeSuiteLabel(suitePath, { redactExternal: options.summaryOnly });
 
   let rawSuiteText;
   try {
@@ -790,7 +837,29 @@ if (isMainModule()) {
   try {
     let parsedSuite;
     try { parsedSuite = JSON.parse(rawSuiteText); } catch { throw new Error("suite is not valid JSON"); }
-    suite = validateSuite(parsedSuite, { redactCaseDetails: options.summaryOnly });
+    const isLockedExam = Boolean(
+      parsedSuite && typeof parsedSuite === "object" && !Array.isArray(parsedSuite) && parsedSuite.role === "locked_promotion_exam"
+    );
+    if (isLockedExam) {
+      suiteFile = sanitizeSuiteLabel(suitePath, { redactExternal: true });
+      if (isInsideRoot(suitePath)) {
+        throw new Error("locked_promotion_exam suites must reside outside the public repository");
+      }
+      if (!options.summaryOnly) {
+        throw new Error("locked_promotion_exam suites require --summary-only");
+      }
+      const expectedDevPath = path.join(root, "eval", "cases.json");
+      let canonicalDevPath = expectedDevPath;
+      try { canonicalDevPath = realpathSync(expectedDevPath); } catch { /* fallback to expectedDevPath */ }
+      const checksPublicDev = options.checkDisjoint.some((rawRef) => {
+        const candidate = path.resolve(process.cwd(), rawRef);
+        try { return realpathSync(candidate) === canonicalDevPath; } catch { return candidate === expectedDevPath; }
+      });
+      if (!checksPublicDev) {
+        throw new Error("locked_promotion_exam suites require --check-disjoint eval/cases.json");
+      }
+    }
+    suite = validateSuite(parsedSuite, { redactCaseDetails: options.summaryOnly || isLockedExam });
   } catch (error) {
     failUsage(`invalid suite (${suiteFile}): ${error.message}`);
   }
@@ -801,7 +870,7 @@ if (isMainModule()) {
   const disjointFrom = [];
   for (const rawRef of options.checkDisjoint) {
     const refPath = path.resolve(process.cwd(), rawRef);
-    const refLabel = sanitizeSuiteLabel(refPath, { redactExternal: options.summaryOnly });
+    let refLabel = sanitizeSuiteLabel(refPath, { redactExternal: options.summaryOnly });
     let rawRefText;
     try {
       rawRefText = await readFile(refPath, "utf8");
@@ -811,14 +880,21 @@ if (isMainModule()) {
     try {
       let parsedRef;
       try { parsedRef = JSON.parse(rawRefText); } catch { throw new Error("suite is not valid JSON"); }
-      const refSuite = validateSuite(parsedRef, { redactCaseDetails: options.summaryOnly });
+      const isLockedRef = Boolean(
+        parsedRef && typeof parsedRef === "object" && !Array.isArray(parsedRef) && parsedRef.role === "locked_promotion_exam"
+      );
+      if (isLockedRef && !options.summaryOnly) {
+        refLabel = sanitizeSuiteLabel(refPath, { redactExternal: true });
+        throw new Error("locked_promotion_exam references require --summary-only");
+      }
+      const refSuite = validateSuite(parsedRef, { redactCaseDetails: options.summaryOnly || isLockedRef });
       const publicRefSuiteName = options.summaryOnly && refLabel === "<external-suite>"
         ? "<external-suite>"
         : refSuite.suite;
       assertSuitesDisjoint(suite, refSuite, {
         primaryLabel: publicSuiteName,
         referenceLabel: publicRefSuiteName,
-        redactCaseDetails: options.summaryOnly
+        redactCaseDetails: options.summaryOnly || isLockedRef
       });
       disjointFrom.push({
         suite: publicRefSuiteName,

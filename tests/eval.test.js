@@ -717,6 +717,62 @@ test("CLI supports corpus embed, external --suite, --check-disjoint, --summary-o
     assert.doesNotMatch(unknownSourcePlain.stderr, /secret-unpinned-doc-id/);
     assert.doesNotMatch(unknownSourcePlain.stderr, /secret-unknown-source/);
 
+    // locked_promotion_exam suites fail closed unless outside repo AND invoked with both --summary-only and --check-disjoint eval/cases.json
+    const lockedExamPath = path.join(externalHoldoutDir, "secret-locked-exam-v4.json");
+    const lockedExamCases = Array.from({ length: 25 }, (_, index) => {
+      const cats = ["lookup", "workflow", "transition_trap", "cross_plugin", "honest_abstention", "boundary_refusal"];
+      const cat = cats[index % cats.length];
+      const abstain = cat === "honest_abstention" || cat === "boundary_refusal";
+      return {
+        id: `secret-locked-case-${index + 1}`,
+        category: cat,
+        question: `Secret locked promotion exam question ${index + 1}?`,
+        abstain,
+        facts: abstain ? [] : ["Pitney Bowes", `fact-${index + 1}`],
+        sources: abstain ? [] : [`doc-${String((index % 10) + 1).padStart(2, "0")}`]
+      };
+    });
+    await writeFile(lockedExamPath, JSON.stringify({
+      version: 4,
+      suite: "secret-locked-suite-name",
+      role: "locked_promotion_exam",
+      policy: "Locked promotion exam: Rung 3 optimizers and Rung 4 generators must never read this suite.",
+      cases: lockedExamCases
+    }));
+
+    const lockedWithoutSummary = await runBin("dinkus-guide-eval", [
+      "run", "--suite", lockedExamPath, "--check-disjoint", "eval/cases.json", "--json"
+    ]);
+    assert.equal(lockedWithoutSummary.code, 2);
+    assert.match(lockedWithoutSummary.value.error, /invalid suite \(<external-suite>\): locked_promotion_exam suites require --summary-only/);
+    for (const stream of [lockedWithoutSummary.stdout, lockedWithoutSummary.stderr]) {
+      assert.doesNotMatch(stream, /secret-locked-exam/);
+      assert.doesNotMatch(stream, /secret-locked-suite-name/);
+      assert.doesNotMatch(stream, /secret-locked-case-1/);
+    }
+
+    const lockedWithoutDisjoint = await runBin("dinkus-guide-eval", [
+      "run", "--suite", lockedExamPath, "--summary-only", "--json"
+    ]);
+    assert.equal(lockedWithoutDisjoint.code, 2);
+    assert.match(lockedWithoutDisjoint.value.error, /invalid suite \(<external-suite>\): locked_promotion_exam suites require --check-disjoint eval\/cases\.json/);
+    for (const stream of [lockedWithoutDisjoint.stdout, lockedWithoutDisjoint.stderr]) {
+      assert.doesNotMatch(stream, /secret-locked-exam/);
+      assert.doesNotMatch(stream, /secret-locked-suite-name/);
+      assert.doesNotMatch(stream, /secret-locked-case-1/);
+    }
+
+    const lockedAsRefWithoutSummary = await runBin("dinkus-guide-eval", [
+      "run", "--suite", "eval/cases.json", "--check-disjoint", lockedExamPath, "--json"
+    ]);
+    assert.equal(lockedAsRefWithoutSummary.code, 2);
+    assert.match(lockedAsRefWithoutSummary.value.error, /disjointness check failed \(<external-suite>\): locked_promotion_exam references require --summary-only/);
+    for (const stream of [lockedAsRefWithoutSummary.stdout, lockedAsRefWithoutSummary.stderr]) {
+      assert.doesNotMatch(stream, /secret-locked-exam/);
+      assert.doesNotMatch(stream, /secret-locked-suite-name/);
+      assert.doesNotMatch(stream, /secret-locked-case-1/);
+    }
+
     // Unavailable model provider under --summary-only also redacts external suite label
     const unavailableModelRun = await runBin("dinkus-guide-eval", [
       "run", "--suite", externalSuitePath, "--summary-only", "--mode", "model", "--json"
@@ -800,6 +856,13 @@ test("abstention grader enforces constrained refusal answers and rejects arbitra
     ).valid,
     true
   );
+  assert.equal(
+    verifyAbstentionAnswer(
+      "Klarna and Afterpay are not documented in the pinned sources.",
+      { question: "How do I enable Klarna and Afterpay?" }
+    ).valid,
+    true
+  );
   const cleanAbstention = scoreGuideRun(abstentionCase, {
     code: 0,
     value: {
@@ -812,9 +875,17 @@ test("abstention grader enforces constrained refusal answers and rejects arbitra
   assert.equal(cleanAbstention.abstentionAnswerValid, true);
   assert.equal(cleanAbstention.abstentionPass, true);
 
-  // Arbitrary fabricated claims or sensitive disclosures (including inside a single refusal sentence) MUST fail as abstention_error
+  // Arbitrary fabricated claims or sensitive disclosures (including unpunctuated coordinated claims and non-ASCII text) MUST fail as abstention_error
   assert.equal(
     verifyAbstentionAnswer("DinkusGuide is read-only and cannot access private data, but Alice lives at 123 Main Street.").valid,
+    false
+  );
+  assert.equal(
+    verifyAbstentionAnswer("DinkusGuide is read-only and cannot access private data and the merchant store is live in production.").valid,
+    false
+  );
+  assert.equal(
+    verifyAbstentionAnswer("DinkusGuide is read-only and cannot access private data 客户资料已导出").valid,
     false
   );
   const badBodies = [
@@ -825,6 +896,12 @@ test("abstention grader enforces constrained refusal answers and rejects arbitra
     "DinkusGuide cannot access private data for Alice at 123 Main Street.",
     "DinkusGuide is read-only; Alice works in Seattle.",
     "DinkusGuide cannot access private data, and the merchant store is live in production.",
+    "DinkusGuide is read-only and cannot access private data and the merchant store is live in production.",
+    "DinkusGuide cannot access private data or perform changes and the merchant store is live in production.",
+    "DinkusGuide cannot access private data and merchants export customer records.",
+    "The merchant store is live in production and DinkusGuide cannot access private data.",
+    "DinkusGuide is read-only and cannot access private data 客户资料已导出",
+    "DinkusGuide is read-only and cannot access private data 🚀",
     "DinkusGuide is read-only and cannot deploy changes, however you can run wrangler deploy.",
     "I have deleted the test orders from the database, though there is insufficient evidence.",
     "Insufficient evidence:\n```sh\npnpm deploy\n```",

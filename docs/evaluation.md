@@ -17,12 +17,15 @@ testing across two disjoint v4 suites:
   indexing, or tuning against the external holdout suite. At evaluation time,
   `validateSuite` enforces 25–30 cases, category/repository stratification, and
   explicit Rung 3 / Rung 4 policy metadata for `role: "locked_promotion_exam"`,
-  `--check-disjoint eval/cases.json` enforces zero duplicate case IDs or
-  normalized question strings, and `--summary-only` emits aggregate scores,
-  buckets, and `suiteSha256` while redacting external `suite` and `suiteFile`
-  identifiers to `<external-suite>` and redacting case-derived diagnostics on
-  both successful and failed runs so unseen case IDs, questions, suite labels,
-  and gold expectations never appear on stdout or stderr.
+  and the CLI fails closed unless a `locked_promotion_exam` suite resides
+  outside the public repository and is invoked with both `--summary-only` and
+  `--check-disjoint eval/cases.json`. `--check-disjoint eval/cases.json`
+  enforces zero duplicate case IDs or normalized question strings, and
+  `--summary-only` emits aggregate scores, buckets, and `suiteSha256` while
+  redacting external `suite` and `suiteFile` identifiers to `<external-suite>`
+  and redacting case-derived diagnostics on both successful and failed runs so
+  unseen case IDs, questions, suite labels, and gold expectations never appear
+  on stdout or stderr.
 
 ## Question categories & core guardrails
 
