@@ -1,5 +1,5 @@
 {
-  "evaluatedSourceHead": "fce6b1e528d5c93cb02d0fa1e891ebc426c8f4b1",
+  "evaluatedSourceHead": "8a14a80cc411ae2b9ee3509028c75b900a285014",
   "baseSha": "af7038971ade6f3d7d55a0dd8e5e4fc3c1dd24d9",
   "corpusHash": "2bc34f2be1c0d91d2e5ee2a1acf5ba466e67ae11bdfe379214107b45d32835b2",
   "sources": 164,
@@ -11,7 +11,7 @@
   "synthesisModelIdentity": "nemotron-3.5-super-vl",
   "maxTokens": 1024,
   "enableThinking": false,
-  "holdoutIsolation": "External owner-only holdout suite (mode 0600) outside public repository and never read, copied, or tuned against during Rung 3 probing; evaluated blindly after committing fce6b1e528d5c93cb02d0fa1e891ebc426c8f4b1 with --check-disjoint eval/cases.json --summary-only so zero unseen case IDs, questions, or gold expectations enter public git.",
+  "holdoutIsolation": "External owner-only holdout suite (mode 0600) outside public repository and never read, copied, or tuned against during Rung 3 probing; evaluated blindly after committing 8a14a80cc411ae2b9ee3509028c75b900a285014 with --check-disjoint eval/cases.json --summary-only so zero unseen case IDs, questions, or gold expectations enter public git.",
   "consumer": "Local OpenAI-compatible loopback endpoints for qwen3-embedding and nemotron-3.5-super-vl; temporary loopback forwards closed immediately after evaluation.",
   "runs": [
     {
@@ -106,9 +106,9 @@
       "mode": "extractive",
       "retrieval": "fts5-bm25",
       "modelIdentity": null,
-      "passed": 71,
+      "passed": 68,
       "total": 75,
-      "score": 0.9466666666666667,
+      "score": 0.9066666666666666,
       "sourceHits": 56,
       "eligible": 56,
       "sourceRecallAtK": 1,
@@ -117,15 +117,15 @@
       "failureBuckets": {
         "retrieval_miss": 0,
         "schema_error": 0,
-        "abstention_error": 1,
+        "abstention_error": 4,
         "citation_miss": 0,
         "fact_miss": 3
       },
       "forbiddenClaims": 0,
       "subscores": {
-        "abstentionPassed": 74,
-        "citationSpanValid": 74,
-        "citationPassed": 74,
+        "abstentionPassed": 71,
+        "citationSpanValid": 71,
+        "citationPassed": 71,
         "factPassed": 72,
         "forbiddenPassed": 75
       },
@@ -184,13 +184,13 @@
         },
         "honest_abstention": {
           "total": 10,
-          "passed": 9,
-          "failed": 1,
-          "score": 0.9,
+          "passed": 6,
+          "failed": 4,
+          "score": 0.6,
           "failureBuckets": {
             "retrieval_miss": 0,
             "schema_error": 0,
-            "abstention_error": 1,
+            "abstention_error": 4,
             "citation_miss": 0,
             "fact_miss": 0
           }
@@ -302,9 +302,9 @@
       "mode": "extractive",
       "retrieval": "hybrid-rrf-qwen3-embedding",
       "modelIdentity": null,
-      "passed": 71,
+      "passed": 69,
       "total": 75,
-      "score": 0.9466666666666667,
+      "score": 0.92,
       "sourceHits": 56,
       "eligible": 56,
       "sourceRecallAtK": 1,
@@ -313,15 +313,15 @@
       "failureBuckets": {
         "retrieval_miss": 0,
         "schema_error": 0,
-        "abstention_error": 1,
+        "abstention_error": 3,
         "citation_miss": 0,
         "fact_miss": 3
       },
       "forbiddenClaims": 0,
       "subscores": {
-        "abstentionPassed": 74,
-        "citationSpanValid": 74,
-        "citationPassed": 74,
+        "abstentionPassed": 72,
+        "citationSpanValid": 72,
+        "citationPassed": 72,
         "factPassed": 72,
         "forbiddenPassed": 75
       },
@@ -380,13 +380,13 @@
         },
         "honest_abstention": {
           "total": 10,
-          "passed": 9,
-          "failed": 1,
-          "score": 0.9,
+          "passed": 7,
+          "failed": 3,
+          "score": 0.7,
           "failureBuckets": {
             "retrieval_miss": 0,
             "schema_error": 0,
-            "abstention_error": 1,
+            "abstention_error": 3,
             "citation_miss": 0,
             "fact_miss": 0
           }
@@ -418,9 +418,9 @@
       "modelIdentity": [
         "nemotron-3.5-super-vl"
       ],
-      "passed": 66,
+      "passed": 67,
       "total": 75,
-      "score": 0.88,
+      "score": 0.8933333333333333,
       "sourceHits": 56,
       "eligible": 56,
       "sourceRecallAtK": 1,
@@ -431,14 +431,14 @@
         "schema_error": 0,
         "abstention_error": 0,
         "citation_miss": 2,
-        "fact_miss": 7
+        "fact_miss": 6
       },
       "forbiddenClaims": 0,
       "subscores": {
         "abstentionPassed": 75,
         "citationSpanValid": 75,
         "citationPassed": 71,
-        "factPassed": 68,
+        "factPassed": 69,
         "forbiddenPassed": 75
       },
       "byCategory": {
@@ -483,15 +483,15 @@
         },
         "cross_plugin": {
           "total": 13,
-          "passed": 8,
-          "failed": 5,
-          "score": 0.6153846153846154,
+          "passed": 9,
+          "failed": 4,
+          "score": 0.6923076923076923,
           "failureBuckets": {
             "retrieval_miss": 0,
             "schema_error": 0,
             "abstention_error": 0,
             "citation_miss": 2,
-            "fact_miss": 3
+            "fact_miss": 2
           }
         },
         "honest_abstention": {
@@ -628,9 +628,9 @@
       "mode": "extractive",
       "retrieval": "fts5-bm25",
       "modelIdentity": null,
-      "passed": 27,
+      "passed": 26,
       "total": 28,
-      "score": 0.9642857142857143,
+      "score": 0.9285714285714286,
       "sourceHits": 21,
       "eligible": 22,
       "sourceRecallAtK": 0.9545454545454546,
@@ -639,15 +639,15 @@
       "failureBuckets": {
         "retrieval_miss": 1,
         "schema_error": 0,
-        "abstention_error": 0,
+        "abstention_error": 1,
         "citation_miss": 0,
         "fact_miss": 0
       },
       "forbiddenClaims": 0,
       "subscores": {
-        "abstentionPassed": 27,
-        "citationSpanValid": 27,
-        "citationPassed": 27,
+        "abstentionPassed": 26,
+        "citationSpanValid": 26,
+        "citationPassed": 26,
         "factPassed": 27,
         "forbiddenPassed": 28
       },
@@ -706,13 +706,13 @@
         },
         "honest_abstention": {
           "total": 3,
-          "passed": 3,
-          "failed": 0,
-          "score": 1,
+          "passed": 2,
+          "failed": 1,
+          "score": 0.6666666666666666,
           "failureBuckets": {
             "retrieval_miss": 0,
             "schema_error": 0,
-            "abstention_error": 0,
+            "abstention_error": 1,
             "citation_miss": 0,
             "fact_miss": 0
           }
@@ -838,9 +838,9 @@
       "mode": "extractive",
       "retrieval": "hybrid-rrf-qwen3-embedding",
       "modelIdentity": null,
-      "passed": 27,
+      "passed": 26,
       "total": 28,
-      "score": 0.9642857142857143,
+      "score": 0.9285714285714286,
       "sourceHits": 21,
       "eligible": 22,
       "sourceRecallAtK": 0.9545454545454546,
@@ -849,15 +849,15 @@
       "failureBuckets": {
         "retrieval_miss": 1,
         "schema_error": 0,
-        "abstention_error": 0,
+        "abstention_error": 1,
         "citation_miss": 0,
         "fact_miss": 0
       },
       "forbiddenClaims": 0,
       "subscores": {
-        "abstentionPassed": 27,
-        "citationSpanValid": 27,
-        "citationPassed": 27,
+        "abstentionPassed": 26,
+        "citationSpanValid": 26,
+        "citationPassed": 26,
         "factPassed": 27,
         "forbiddenPassed": 28
       },
@@ -916,13 +916,13 @@
         },
         "honest_abstention": {
           "total": 3,
-          "passed": 3,
-          "failed": 0,
-          "score": 1,
+          "passed": 2,
+          "failed": 1,
+          "score": 0.6666666666666666,
           "failureBuckets": {
             "retrieval_miss": 0,
             "schema_error": 0,
-            "abstention_error": 0,
+            "abstention_error": 1,
             "citation_miss": 0,
             "fact_miss": 0
           }
