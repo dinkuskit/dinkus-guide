@@ -2,10 +2,10 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { request } from "node:http";
 import { spawnSync } from "node:child_process";
-import { createAskService, normalizeAnswer, runGuide } from "../src/ask-service.js";
+import { createAskService, createWarmGuideRunner, DEFAULT_LIMITS, normalizeAnswer, runGuide } from "../src/ask-service.js";
 
 const token = "synthetic-test-token-with-at-least-32-characters";
-const source = { id: "public-doc", provenance: `https://github.com/dinkuskit/dinkuskit/blob/${"a".repeat(40)}/README.md` };
+const source = { id: "public-doc", repository: "dinkuskit/dinkuskit", path: "README.md", provenance: `https://github.com/dinkuskit/dinkuskit/blob/${"a".repeat(40)}/README.md` };
 const manifest = { sources: [source] };
 const citation = { sourceId: source.id, startLine: 1, endLine: 3, url: `${source.provenance}#L1-L3` };
 const answer = (text = "The complete validated answer.") => ({ mode: "model", status: "answered", answer: text, citations: [citation], evidence: [citation] });
@@ -70,8 +70,10 @@ test("character and byte limits include unicode and bodies without Content-Lengt
 });
 
 test("parallel visitors stay separate and the process enforces shared concurrency", async (t) => {
+  assert.equal(DEFAULT_LIMITS.concurrency, 4);
+  assert.equal(DEFAULT_LIMITS.queueSize, 8);
   let release;
-  const f = await fixture(t, { limits: { concurrency: 2 }, runQuestion: async (q) => {
+  const f = await fixture(t, { limits: { concurrency: 2, queueSize: 0 }, runQuestion: async (q) => {
     await new Promise((resolve) => { (release ??= []).push(resolve); }); return answer(q);
   } });
   const a = f.ask({ question: "visitor A" }), b = f.ask({ question: "visitor B" });
@@ -82,9 +84,51 @@ test("parallel visitors stay separate and the process enforces shared concurrenc
   assert.equal((await (await b).json()).answer, "visitor B");
 });
 
+test("bounded FIFO queue holds bursts up to queueSize, cancels disconnected waiters, and rejects overflow with 429", async (t) => {
+  const started = [];
+  const gates = new Map();
+  const f = await fixture(t, { limits: { concurrency: 2, queueSize: 2 }, runQuestion: async (q) => {
+    started.push(q);
+    await new Promise((resolve) => { gates.set(q, resolve); });
+    return answer(q);
+  } });
+  const r1 = f.ask({ question: "q1" });
+  const r2 = f.ask({ question: "q2" });
+  while (started.length < 2) await delay(5);
+
+  const cancelQueued = new AbortController();
+  const rCanceled = f.ask({ question: "q-cancel" }, { signal: cancelQueued.signal });
+  const r3 = f.ask({ question: "q3" });
+  await delay(15);
+  assert.equal((await f.ask({ question: "q-overflow" })).status, 429);
+
+  cancelQueued.abort();
+  await assert.rejects(rCanceled);
+  await delay(10);
+
+  const r4 = f.ask({ question: "q4" });
+  await delay(15);
+  assert.equal((await f.ask({ question: "q-overflow-2" })).status, 429);
+
+  gates.get("q1")();
+  assert.equal((await (await r1).json()).answer, "q1");
+  while (!started.includes("q3")) await delay(5);
+  assert.ok(!started.includes("q-cancel"));
+
+  gates.get("q2")();
+  assert.equal((await (await r2).json()).answer, "q2");
+  while (!started.includes("q4")) await delay(5);
+
+  gates.get("q3")();
+  gates.get("q4")();
+  assert.equal((await (await r3).json()).answer, "q3");
+  assert.equal((await (await r4).json()).answer, "q4");
+  assert.deepEqual(started, ["q1", "q2", "q3", "q4"]);
+});
+
 test("timeout aborts work, frees only completed work, and hides provider errors", async (t) => {
   let signalled = false, release;
-  const f = await fixture(t, { limits: { durationMs: 40, concurrency: 1 }, runQuestion: async (_q, { signal }) => {
+  const f = await fixture(t, { limits: { durationMs: 40, concurrency: 1, queueSize: 0 }, runQuestion: async (_q, { signal }) => {
     signal.addEventListener("abort", () => { signalled = true; });
     await new Promise((resolve) => { release = resolve; }); throw new Error("private provider detail");
   } });
@@ -137,8 +181,100 @@ test("real owned CLI child cancellation waits for process close", async () => {
   await assert.rejects(runGuide("question", { signal: controller.signal }), (error) => error.publicCode === "timeout");
 });
 
+test("warm in-memory runner reuses pre-warmed corpus and propagates request abort to fetch", async (t) => {
+  const docLines = [
+    "# Template Store Setup",
+    "Install dependencies with `npm install` and start the local template store.",
+    "Configure the storefront environment before running migrations."
+  ];
+  const warmCorpus = {
+    manifest,
+    corpusHash: "b".repeat(64),
+    documents: [{ source, text: docLines.join("\n"), lines: docLines }],
+    embeddings: null
+  };
+  let fetchCalls = 0;
+  const runner = await createWarmGuideRunner({
+    corpus: warmCorpus,
+    env: {
+      DINKUS_GUIDE_BASE_URL: "http://127.0.0.1:8002/v1",
+      DINKUS_GUIDE_MODEL: "nemotron-3.5-super-vl",
+      DINKUS_GUIDE_API_KEY: "local"
+    },
+    fetchImpl: async (_url, init) => {
+      fetchCalls += 1;
+      if (init?.signal?.aborted) throw new Error("aborted");
+      return new Response(JSON.stringify({
+        model: "nemotron-3.5-super-vl",
+        choices: [{
+          message: {
+            content: JSON.stringify({
+              status: "answered",
+              answer: "Install dependencies with `npm install` and start the local template store.",
+              citationIds: ["E1"]
+            })
+          }
+        }]
+      }), { status: 200, headers: { "content-type": "application/json" } });
+    }
+  });
+  assert.equal(runner.manifest, manifest);
+
+  const server = await createAskService({
+    token,
+    corpus: warmCorpus,
+    env: {
+      DINKUS_GUIDE_BASE_URL: "http://127.0.0.1:8002/v1",
+      DINKUS_GUIDE_MODEL: "nemotron-3.5-super-vl",
+      DINKUS_GUIDE_API_KEY: "local"
+    },
+    fetchImpl: async (_url, init) => {
+      fetchCalls += 1;
+      if (init?.signal?.aborted) throw new Error("aborted");
+      return new Response(JSON.stringify({
+        model: "nemotron-3.5-super-vl",
+        choices: [{
+          message: {
+            content: JSON.stringify({
+              status: "answered",
+              answer: "Install dependencies with `npm install` and start the local template store.",
+              citationIds: ["E1"]
+            })
+          }
+        }]
+      }), { status: 200, headers: { "content-type": "application/json" } });
+    }
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => { server.closeAllConnections(); return new Promise((resolve) => server.close(resolve)); });
+  const url = `http://127.0.0.1:${server.address().port}/ask`;
+
+  for (let i = 0; i < 2; i += 1) {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({ question: "How do I install dependencies for the template store setup?" })
+    });
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.status, "answered");
+    assert.deepEqual(body.citations, [`${source.provenance}#L1-L3`]);
+  }
+  assert.equal(fetchCalls, 2);
+
+  const abortController = new AbortController();
+  abortController.abort();
+  await assert.rejects(runner("How do I install dependencies?", { signal: abortController.signal }), (err) => err.publicCode === "timeout");
+  await assert.rejects(
+    createWarmGuideRunner({ corpus: warmCorpus, env: { DINKUS_GUIDE_EMBED_BASE_URL: "http://127.0.0.1:11434/v1" } }),
+    (err) => err.publicCode === "unavailable"
+  );
+});
+
 test("invalid startup bounds and missing service credential fail closed", async () => {
   await assert.rejects(createAskService({ token: "short", manifest }));
   await assert.rejects(createAskService({ token, manifest, limits: { concurrency: 17 } }));
+  await assert.rejects(createAskService({ token, manifest, limits: { queueSize: 65 } }));
+  await assert.rejects(createAskService({ token, manifest, limits: { queueSize: -1 } }));
   await assert.rejects(createAskService({ token, manifest, limits: { durationMs: 90001 } }));
 });
