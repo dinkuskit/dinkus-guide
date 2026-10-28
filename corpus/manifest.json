@@ -5,156 +5,255 @@
     {
       "id": "kit-deploy",
       "repository": "dinkuskit/dinkuskit",
-      "commit": "11dfa2434b8d3137cbf95b66e5438cc3af10ec34",
+      "commit": "33c91aebf9365190580f9afd9be167b0fa0032e1",
       "path": "DEPLOY.md",
       "layer": "dinkuskit",
       "status": "active",
-      "sha256": "9cf46cb0a1ac0cd75f2248a2b9d2ccafb0a017f6b91b94d69977510ac84df650",
+      "sha256": "ac1f7161c75492908ddb379b134dcb01355956ac7972dafbf0fb6089d49cb6e0",
       "license": "MIT",
-      "provenance": "https://github.com/dinkuskit/dinkuskit/blob/11dfa2434b8d3137cbf95b66e5438cc3af10ec34/DEPLOY.md"
+      "provenance": "https://github.com/dinkuskit/dinkuskit/blob/33c91aebf9365190580f9afd9be167b0fa0032e1/DEPLOY.md"
     },
     {
       "id": "kit-readme",
       "repository": "dinkuskit/dinkuskit",
-      "commit": "11dfa2434b8d3137cbf95b66e5438cc3af10ec34",
+      "commit": "33c91aebf9365190580f9afd9be167b0fa0032e1",
       "path": "README.md",
       "layer": "dinkuskit",
       "status": "active",
-      "sha256": "b1b1822b58ae6f614fbfc256babaa2ce0539d584aaa7dc86698b1bd4f58dd017",
+      "sha256": "5e3dedcccf289cf400f93d77f7dac077116b176e72b8b466704e13fadbfbf3b4",
       "license": "MIT",
-      "provenance": "https://github.com/dinkuskit/dinkuskit/blob/11dfa2434b8d3137cbf95b66e5438cc3af10ec34/README.md"
+      "provenance": "https://github.com/dinkuskit/dinkuskit/blob/33c91aebf9365190580f9afd9be167b0fa0032e1/README.md"
     },
     {
       "id": "kit-cloudflare-readme",
       "repository": "dinkuskit/dinkuskit",
-      "commit": "11dfa2434b8d3137cbf95b66e5438cc3af10ec34",
+      "commit": "33c91aebf9365190580f9afd9be167b0fa0032e1",
       "path": "cloudflare/README.md",
       "layer": "dinkuskit",
       "status": "active",
       "sha256": "68d1a30d7f87c051bdd79a6622d91651d0b8bbfbca832affcb425dde9b757185",
       "license": "MIT",
-      "provenance": "https://github.com/dinkuskit/dinkuskit/blob/11dfa2434b8d3137cbf95b66e5438cc3af10ec34/cloudflare/README.md"
+      "provenance": "https://github.com/dinkuskit/dinkuskit/blob/33c91aebf9365190580f9afd9be167b0fa0032e1/cloudflare/README.md"
     },
     {
       "id": "kit-charter",
       "repository": "dinkuskit/dinkuskit",
-      "commit": "11dfa2434b8d3137cbf95b66e5438cc3af10ec34",
+      "commit": "33c91aebf9365190580f9afd9be167b0fa0032e1",
       "path": "docs/CHARTER.md",
       "layer": "dinkuskit",
       "status": "active",
-      "sha256": "acb77a51aa5bea2f9b9e673c8e2b05327073a6dd2f20c519539129661937286f",
+      "sha256": "d2f6f28eac95e39068cfb4e97aefb1297b05de927f27cd642c3d17bd9dfd6604",
       "license": "MIT",
-      "provenance": "https://github.com/dinkuskit/dinkuskit/blob/11dfa2434b8d3137cbf95b66e5438cc3af10ec34/docs/CHARTER.md"
+      "provenance": "https://github.com/dinkuskit/dinkuskit/blob/33c91aebf9365190580f9afd9be167b0fa0032e1/docs/CHARTER.md"
     },
     {
       "id": "kit-account-pages",
       "repository": "dinkuskit/dinkuskit",
-      "commit": "11dfa2434b8d3137cbf95b66e5438cc3af10ec34",
+      "commit": "33c91aebf9365190580f9afd9be167b0fa0032e1",
       "path": "docs/account-pages.md",
       "layer": "dinkuskit",
       "status": "active",
       "sha256": "b12032c3bd354999d1671002ba6da6f02dadd6940a8e3c8a1717fc2370038b85",
       "license": "MIT",
-      "provenance": "https://github.com/dinkuskit/dinkuskit/blob/11dfa2434b8d3137cbf95b66e5438cc3af10ec34/docs/account-pages.md"
+      "provenance": "https://github.com/dinkuskit/dinkuskit/blob/33c91aebf9365190580f9afd9be167b0fa0032e1/docs/account-pages.md"
     },
     {
       "id": "kit-getting-started",
       "repository": "dinkuskit/dinkuskit",
-      "commit": "11dfa2434b8d3137cbf95b66e5438cc3af10ec34",
+      "commit": "33c91aebf9365190580f9afd9be167b0fa0032e1",
       "path": "docs/getting-started.md",
       "layer": "dinkuskit",
       "status": "active",
       "sha256": "381a3992d17d47b4b3227618311f783de06c37d96d3db495e513d40e0ffd1fde",
       "license": "MIT",
-      "provenance": "https://github.com/dinkuskit/dinkuskit/blob/11dfa2434b8d3137cbf95b66e5438cc3af10ec34/docs/getting-started.md"
+      "provenance": "https://github.com/dinkuskit/dinkuskit/blob/33c91aebf9365190580f9afd9be167b0fa0032e1/docs/getting-started.md"
     },
     {
       "id": "kit-inventory-overview",
       "repository": "dinkuskit/dinkuskit",
-      "commit": "11dfa2434b8d3137cbf95b66e5438cc3af10ec34",
+      "commit": "33c91aebf9365190580f9afd9be167b0fa0032e1",
       "path": "docs/inventory-overview.md",
       "layer": "dinkuskit",
       "status": "active",
       "sha256": "0991a9bdb910a8504d7984a7090a11ad1adebbc3332308bf3cb150b6dc78e7bf",
       "license": "MIT",
-      "provenance": "https://github.com/dinkuskit/dinkuskit/blob/11dfa2434b8d3137cbf95b66e5438cc3af10ec34/docs/inventory-overview.md"
+      "provenance": "https://github.com/dinkuskit/dinkuskit/blob/33c91aebf9365190580f9afd9be167b0fa0032e1/docs/inventory-overview.md"
     },
     {
       "id": "kit-merchant-account-model",
       "repository": "dinkuskit/dinkuskit",
-      "commit": "11dfa2434b8d3137cbf95b66e5438cc3af10ec34",
+      "commit": "33c91aebf9365190580f9afd9be167b0fa0032e1",
       "path": "docs/merchant-account-model.md",
       "layer": "dinkuskit",
       "status": "active",
       "sha256": "770fd55a965f1ccd929c822710b28f8ebdc605ecd121ef4402fdb9450004d404",
       "license": "MIT",
-      "provenance": "https://github.com/dinkuskit/dinkuskit/blob/11dfa2434b8d3137cbf95b66e5438cc3af10ec34/docs/merchant-account-model.md"
+      "provenance": "https://github.com/dinkuskit/dinkuskit/blob/33c91aebf9365190580f9afd9be167b0fa0032e1/docs/merchant-account-model.md"
     },
     {
       "id": "kit-organization-approvals",
       "repository": "dinkuskit/dinkuskit",
-      "commit": "11dfa2434b8d3137cbf95b66e5438cc3af10ec34",
+      "commit": "33c91aebf9365190580f9afd9be167b0fa0032e1",
       "path": "docs/organization-approvals.md",
       "layer": "dinkuskit",
       "status": "active",
       "sha256": "6f388b1b207ab50862b0e77f8f04c55ed638f52968f05de678811985a3f11d21",
       "license": "MIT",
-      "provenance": "https://github.com/dinkuskit/dinkuskit/blob/11dfa2434b8d3137cbf95b66e5438cc3af10ec34/docs/organization-approvals.md"
+      "provenance": "https://github.com/dinkuskit/dinkuskit/blob/33c91aebf9365190580f9afd9be167b0fa0032e1/docs/organization-approvals.md"
     },
     {
       "id": "kit-provenance",
       "repository": "dinkuskit/dinkuskit",
-      "commit": "11dfa2434b8d3137cbf95b66e5438cc3af10ec34",
+      "commit": "33c91aebf9365190580f9afd9be167b0fa0032e1",
       "path": "docs/provenance.md",
       "layer": "dinkuskit",
       "status": "active",
       "sha256": "ad6ba9a932385a98240aad1d1cc037db292ea92cb5b0d77c918c5915cf290a6d",
       "license": "MIT",
-      "provenance": "https://github.com/dinkuskit/dinkuskit/blob/11dfa2434b8d3137cbf95b66e5438cc3af10ec34/docs/provenance.md"
+      "provenance": "https://github.com/dinkuskit/dinkuskit/blob/33c91aebf9365190580f9afd9be167b0fa0032e1/docs/provenance.md"
     },
     {
       "id": "kit-shared-store-connections",
       "repository": "dinkuskit/dinkuskit",
-      "commit": "11dfa2434b8d3137cbf95b66e5438cc3af10ec34",
+      "commit": "33c91aebf9365190580f9afd9be167b0fa0032e1",
       "path": "docs/shared-store-connections.md",
       "layer": "dinkuskit",
       "status": "active",
-      "sha256": "b9205293c1d6ef5e8648a66f0d73f87df9932dfb8baf32f30e0a4def6a554d53",
+      "sha256": "03a17e65954045a5738abd2a12a99d002d2b26b35225976043bb305852f36ee3",
       "license": "MIT",
-      "provenance": "https://github.com/dinkuskit/dinkuskit/blob/11dfa2434b8d3137cbf95b66e5438cc3af10ec34/docs/shared-store-connections.md"
+      "provenance": "https://github.com/dinkuskit/dinkuskit/blob/33c91aebf9365190580f9afd9be167b0fa0032e1/docs/shared-store-connections.md"
     },
     {
       "id": "kit-commerce-reference",
       "repository": "dinkuskit/dinkuskit",
-      "commit": "11dfa2434b8d3137cbf95b66e5438cc3af10ec34",
+      "commit": "33c91aebf9365190580f9afd9be167b0fa0032e1",
       "path": "docs/updates/reference/commerce.md",
       "layer": "dinkuskit",
       "status": "active",
       "sha256": "b8e313d4563c8830f25331838cf7a189e6db235dd49af2f61d241b9f5d608fb8",
       "license": "MIT",
-      "provenance": "https://github.com/dinkuskit/dinkuskit/blob/11dfa2434b8d3137cbf95b66e5438cc3af10ec34/docs/updates/reference/commerce.md"
+      "provenance": "https://github.com/dinkuskit/dinkuskit/blob/33c91aebf9365190580f9afd9be167b0fa0032e1/docs/updates/reference/commerce.md"
     },
     {
       "id": "kit-payments-reference",
       "repository": "dinkuskit/dinkuskit",
-      "commit": "11dfa2434b8d3137cbf95b66e5438cc3af10ec34",
+      "commit": "33c91aebf9365190580f9afd9be167b0fa0032e1",
       "path": "docs/updates/reference/payments.md",
       "layer": "dinkuskit",
       "status": "active",
       "sha256": "0587df7c90892bc7147b2abd0c60c60cb99d5693fcaa1e52a152c4514ecd0fe2",
       "license": "MIT",
-      "provenance": "https://github.com/dinkuskit/dinkuskit/blob/11dfa2434b8d3137cbf95b66e5438cc3af10ec34/docs/updates/reference/payments.md"
+      "provenance": "https://github.com/dinkuskit/dinkuskit/blob/33c91aebf9365190580f9afd9be167b0fa0032e1/docs/updates/reference/payments.md"
     },
     {
       "id": "kit-ship-reference",
       "repository": "dinkuskit/dinkuskit",
-      "commit": "11dfa2434b8d3137cbf95b66e5438cc3af10ec34",
+      "commit": "33c91aebf9365190580f9afd9be167b0fa0032e1",
       "path": "docs/updates/reference/ship.md",
       "layer": "dinkuskit",
       "status": "active",
       "sha256": "7110d54f5bd5d07334577520bf02db985b0b6fdf1d46076b2bed0d040fc324d3",
       "license": "MIT",
-      "provenance": "https://github.com/dinkuskit/dinkuskit/blob/11dfa2434b8d3137cbf95b66e5438cc3af10ec34/docs/updates/reference/ship.md"
+      "provenance": "https://github.com/dinkuskit/dinkuskit/blob/33c91aebf9365190580f9afd9be167b0fa0032e1/docs/updates/reference/ship.md"
+    },
+    {
+      "id": "kit-start-here",
+      "repository": "dinkuskit/dinkuskit",
+      "commit": "33c91aebf9365190580f9afd9be167b0fa0032e1",
+      "path": "docs/updates/start-here.md",
+      "layer": "dinkuskit",
+      "status": "active",
+      "sha256": "aa77f36078c1da4974dc0b0500ce60af42fd22cb327d25c7e3bc64a6c2c4ebd0",
+      "license": "MIT",
+      "provenance": "https://github.com/dinkuskit/dinkuskit/blob/33c91aebf9365190580f9afd9be167b0fa0032e1/docs/updates/start-here.md"
+    },
+    {
+      "id": "kit-troubleshooting",
+      "repository": "dinkuskit/dinkuskit",
+      "commit": "33c91aebf9365190580f9afd9be167b0fa0032e1",
+      "path": "docs/updates/troubleshooting.md",
+      "layer": "dinkuskit",
+      "status": "active",
+      "sha256": "c71575ab0f1db5921fe53ae178ae21929db653535f168c580289a396ca37bf1c",
+      "license": "MIT",
+      "provenance": "https://github.com/dinkuskit/dinkuskit/blob/33c91aebf9365190580f9afd9be167b0fa0032e1/docs/updates/troubleshooting.md"
+    },
+    {
+      "id": "kit-owner-setup",
+      "repository": "dinkuskit/dinkuskit",
+      "commit": "33c91aebf9365190580f9afd9be167b0fa0032e1",
+      "path": "docs/updates/store-owners/setup.md",
+      "layer": "dinkuskit",
+      "status": "active",
+      "sha256": "200ab888a92f318eab8d970334d645f2a86d8512f3e0d1f1bc59982bce5e5e88",
+      "license": "MIT",
+      "provenance": "https://github.com/dinkuskit/dinkuskit/blob/33c91aebf9365190580f9afd9be167b0fa0032e1/docs/updates/store-owners/setup.md"
+    },
+    {
+      "id": "kit-owner-first-product",
+      "repository": "dinkuskit/dinkuskit",
+      "commit": "33c91aebf9365190580f9afd9be167b0fa0032e1",
+      "path": "docs/updates/store-owners/first-product.md",
+      "layer": "dinkuskit",
+      "status": "active",
+      "sha256": "a52b59aee822858d3283fda8b4391b5de0bf364d43e3d862c9e98314f1c79481",
+      "license": "MIT",
+      "provenance": "https://github.com/dinkuskit/dinkuskit/blob/33c91aebf9365190580f9afd9be167b0fa0032e1/docs/updates/store-owners/first-product.md"
+    },
+    {
+      "id": "kit-owner-test-order",
+      "repository": "dinkuskit/dinkuskit",
+      "commit": "33c91aebf9365190580f9afd9be167b0fa0032e1",
+      "path": "docs/updates/store-owners/test-order.md",
+      "layer": "dinkuskit",
+      "status": "active",
+      "sha256": "128f3bc1c531aac1bd857e156586bbb83fede3d360f717fd0946b13b40d3faea",
+      "license": "MIT",
+      "provenance": "https://github.com/dinkuskit/dinkuskit/blob/33c91aebf9365190580f9afd9be167b0fa0032e1/docs/updates/store-owners/test-order.md"
+    },
+    {
+      "id": "kit-dev-integrate",
+      "repository": "dinkuskit/dinkuskit",
+      "commit": "33c91aebf9365190580f9afd9be167b0fa0032e1",
+      "path": "docs/updates/developers/integrate.md",
+      "layer": "dinkuskit",
+      "status": "active",
+      "sha256": "136c45ef7e98e57dd5967905f213e3898c3e57457e48fa3ccf28e05c2e9a383e",
+      "license": "MIT",
+      "provenance": "https://github.com/dinkuskit/dinkuskit/blob/33c91aebf9365190580f9afd9be167b0fa0032e1/docs/updates/developers/integrate.md"
+    },
+    {
+      "id": "kit-dev-add-on",
+      "repository": "dinkuskit/dinkuskit",
+      "commit": "33c91aebf9365190580f9afd9be167b0fa0032e1",
+      "path": "docs/updates/developers/add-on.md",
+      "layer": "dinkuskit",
+      "status": "active",
+      "sha256": "5fd043b47f052f597f05bd1a08ad51382c96d9425e24d677774dcbe5ae55e8cd",
+      "license": "MIT",
+      "provenance": "https://github.com/dinkuskit/dinkuskit/blob/33c91aebf9365190580f9afd9be167b0fa0032e1/docs/updates/developers/add-on.md"
+    },
+    {
+      "id": "kit-dev-contribute",
+      "repository": "dinkuskit/dinkuskit",
+      "commit": "33c91aebf9365190580f9afd9be167b0fa0032e1",
+      "path": "docs/updates/developers/contribute.md",
+      "layer": "dinkuskit",
+      "status": "active",
+      "sha256": "bc13e18adbe766d15524dea9b184e57f254b4186374732f8bfefbd6e0491b7f0",
+      "license": "MIT",
+      "provenance": "https://github.com/dinkuskit/dinkuskit/blob/33c91aebf9365190580f9afd9be167b0fa0032e1/docs/updates/developers/contribute.md"
+    },
+    {
+      "id": "kit-dinkusguide-pilot",
+      "repository": "dinkuskit/dinkuskit",
+      "commit": "33c91aebf9365190580f9afd9be167b0fa0032e1",
+      "path": "docs/dinkusguide-pilot.md",
+      "layer": "dinkuskit",
+      "status": "active",
+      "sha256": "7947357be8ac0439d82c377e02fec08c4cea9137349b974c9474a2f62dd62ff0",
+      "license": "MIT",
+      "provenance": "https://github.com/dinkuskit/dinkuskit/blob/33c91aebf9365190580f9afd9be167b0fa0032e1/docs/dinkusguide-pilot.md"
     },
     {
       "id": "commerce-readme",
