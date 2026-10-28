@@ -9,6 +9,10 @@ in `corpus/manifest.json` across the seven approved product/API repositories
 context documents from `dinkuskit/.github`. Raw snapshots and optional dense chunk embeddings are
 stored only in the ignored `.cache/dinkus-guide/` directory.
 
+An optional [authenticated loopback ask service](docs/ask-service.md) supports
+the website pilot using the same validated Guide CLI, without exposing corpus
+commands or raw model tokens. Deployment and public activation remain separate.
+
 ## Quickstart
 
 Requires Node 24.

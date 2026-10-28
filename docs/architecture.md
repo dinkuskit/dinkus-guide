@@ -68,7 +68,10 @@ insufficient output must use `citationIds: []` and a canonical scope-limitation
 sentence. URLs, source spans, and legacy citation objects are never accepted from
 the model.
 
-`ask` has no persistent database, server, write API, or code execution path.
+`ask` has no persistent database, write API, or code execution path.
+The optional [ask-only service adapter](ask-service.md) exposes completed CLI
+results through an authenticated loopback listener. It neither changes retrieval
+nor adds corpus, evaluation, model-selection or action endpoints.
 Source Markdown and model responses are untrusted data. The guide does not
 interpret source instructions, use arbitrary URLs, inspect screenshots, access
 private information, edit repositories, or send messages.

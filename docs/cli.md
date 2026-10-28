@@ -7,8 +7,14 @@ dinkus-guide corpus sync [--json]
 dinkus-guide corpus embed [--json]
 dinkus-guide corpus verify [--json]
 dinkus-guide ask QUESTION [--json] [--mode extractive|model] [--limit 12]
+dinkus-guide ask --json --mode model -- QUESTION
+node bin/dinkus-guide-serve
 dinkus-guide-eval run [--suite eval/cases.json] [--check-disjoint eval/cases.json] [--summary-only] [--json] [--mode extractive|model|retrieval|recall] [--k 12]
 ```
+
+`--` ends CLI option parsing so a question beginning with `-` remains text.
+The optional loopback HTTP service has its own authenticated, bounded
+[ask-only contract](ask-service.md); it never exposes corpus or evaluator commands.
 
 `sync` and `embed` are the only commands that write to disk
 (`.cache/dinkus-guide/`). `sync` admits only exact manifest URLs, rejects
