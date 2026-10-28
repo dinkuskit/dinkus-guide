@@ -2,11 +2,12 @@ import { createServer } from "node:http";
 import { spawn } from "node:child_process";
 import { timingSafeEqual } from "node:crypto";
 import { fileURLToPath } from "node:url";
-import { citationFor, loadManifest } from "./corpus.js";
+import { citationFor, loadManifest, verifyCorpus } from "./corpus.js";
+import { answerQuestion, chunkCorpus, createOpenAICompatibleEmbedTransport, createOpenAICompatibleTransport, rankEvidence } from "./guide.js";
 
 export const DEFAULT_LIMITS = Object.freeze({
   questionCharacters: 2000, bodyBytes: 16384, responseBytes: 65536,
-  durationMs: 90000, concurrency: 2, requestsPerMinute: 20
+  durationMs: 90000, concurrency: 4, queueSize: 8, requestsPerMinute: 20
 });
 const cli = fileURLToPath(new URL("../bin/dinkus-guide", import.meta.url));
 const failure = (code) => Object.assign(new Error(code), { publicCode: code });
@@ -70,6 +71,44 @@ export function runGuide(question, { signal, maxBytes = 1048576 } = {}) {
   });
 }
 
+/** Preloads verified corpus, embeddings, and in-memory FTS5 index once per server lifecycle. */
+export async function createWarmGuideRunner({ corpus, env = process.env, fetchImpl = fetch } = {}) {
+  const verifiedCorpus = corpus ?? await verifyCorpus({ chunkCorpusImpl: chunkCorpus });
+  if (env.DINKUS_GUIDE_EMBED_BASE_URL && !verifiedCorpus.embeddings?.vectors?.size) throw failure("unavailable");
+  rankEvidence("dinkuskit", verifiedCorpus, 1);
+  const runner = async (question, { signal } = {}) => {
+    if (signal?.aborted) throw failure("timeout");
+    const fetchForRequest = signal
+      ? (url, init = {}) => fetchImpl(url, {
+          ...init,
+          signal: init.signal ? AbortSignal.any([init.signal, signal]) : signal
+        })
+      : fetchImpl;
+    try {
+      const transport = createOpenAICompatibleTransport({
+        fetchImpl: fetchForRequest,
+        baseUrl: env.DINKUS_GUIDE_BASE_URL,
+        model: env.DINKUS_GUIDE_MODEL || "nemotron-3.5-super-vl",
+        apiKey: env.DINKUS_GUIDE_API_KEY,
+        noThink: env.DINKUS_GUIDE_NO_THINK === "1"
+      });
+      const embedTransport = env.DINKUS_GUIDE_EMBED_BASE_URL
+        ? createOpenAICompatibleEmbedTransport({
+            fetchImpl: fetchForRequest,
+            baseUrl: env.DINKUS_GUIDE_EMBED_BASE_URL,
+            model: env.DINKUS_GUIDE_EMBED_MODEL || "qwen3-embedding",
+            apiKey: env.DINKUS_GUIDE_EMBED_API_KEY || ""
+          })
+        : undefined;
+      return await answerQuestion(question, verifiedCorpus, { mode: "model", limit: 12, transport, embedTransport });
+    } catch {
+      throw failure(signal?.aborted ? "timeout" : "unavailable");
+    }
+  };
+  runner.manifest = verifiedCorpus.manifest;
+  return runner;
+}
+
 function authorized(header, token) {
   if (typeof header !== "string") return false;
   const received = Buffer.from(header);
@@ -80,20 +119,27 @@ function authorized(header, token) {
 function limitsWith(overrides) {
   const limits = { ...DEFAULT_LIMITS, ...overrides };
   const maxima = { questionCharacters: 8000, bodyBytes: 65536, responseBytes: 1048576,
-    durationMs: 90000, concurrency: 16, requestsPerMinute: 600 };
+    durationMs: 90000, concurrency: 16, queueSize: 64, requestsPerMinute: 600 };
   for (const [name, value] of Object.entries(limits)) {
-    if (!(name in DEFAULT_LIMITS) || !Number.isSafeInteger(value) || value < 1 || value > maxima[name]) {
+    const min = name === "queueSize" ? 0 : 1;
+    if (!(name in DEFAULT_LIMITS) || !Number.isSafeInteger(value) || value < min || value > maxima[name]) {
       throw new Error("Invalid service limits");
     }
   }
   return limits;
 }
 
-export async function createAskService({ token, manifest, runQuestion = runGuide, limits: overrides } = {}) {
+export async function createAskService({ token, manifest, corpus, env, fetchImpl, runQuestion, limits: overrides } = {}) {
   if (typeof token !== "string" || token.length < 32 || /\s/.test(token)) throw new Error("A service token of at least 32 non-whitespace characters is required");
   const limits = limitsWith(overrides);
+  if (!runQuestion) {
+    const warmRunner = await createWarmGuideRunner({ corpus, env, fetchImpl });
+    runQuestion = warmRunner;
+    manifest ??= warmRunner.manifest;
+  }
   manifest ??= await loadManifest();
   let active = 0, windowStart = Date.now(), accepted = 0;
+  const queue = [];
   const server = createServer(async (req, res) => {
     const controller = new AbortController();
     let deadline;
@@ -130,11 +176,43 @@ export async function createAskService({ token, manifest, runQuestion = runGuide
           !input.question.trim() || input.question.includes("\0")) { reply(400, { error: "invalid_request" }); return; }
       if ([...input.question].length > limits.questionCharacters) { reply(413, { error: "too_large" }); return; }
       if (Date.now() - windowStart >= 60000) { windowStart = Date.now(); accepted = 0; }
-      if (active >= limits.concurrency || accepted >= limits.requestsPerMinute) { reply(429, { error: "overloaded" }); return; }
-      active += 1; accepted += 1;
+      if (accepted >= limits.requestsPerMinute || (active >= limits.concurrency && queue.length >= limits.queueSize)) {
+        reply(429, { error: "overloaded" }); return;
+      }
+      if (active >= limits.concurrency) {
+        const acquired = await new Promise((resolve) => {
+          const entry = {
+            wake: () => { controller.signal.removeEventListener("abort", onAbort); resolve(true); }
+          };
+          const onAbort = () => {
+            const idx = queue.indexOf(entry);
+            if (idx !== -1) queue.splice(idx, 1);
+            resolve(false);
+          };
+          if (controller.signal.aborted) { resolve(false); return; }
+          controller.signal.addEventListener("abort", onAbort, { once: true });
+          queue.push(entry);
+        });
+        if (!acquired || controller.signal.aborted) return;
+        if (Date.now() - windowStart >= 60000) { windowStart = Date.now(); accepted = 0; }
+        if (accepted >= limits.requestsPerMinute) {
+          const next = queue.shift();
+          if (next) next.wake();
+          else active -= 1;
+          reply(429, { error: "overloaded" });
+          return;
+        }
+      } else {
+        active += 1;
+      }
+      accepted += 1;
       // Attach release to real completion, not to the HTTP timeout/disconnect.
       const running = Promise.resolve().then(() => runQuestion(input.question, { signal: controller.signal }));
-      const released = running.finally(() => { active -= 1; });
+      const released = running.finally(() => {
+        const next = queue.shift();
+        if (next) next.wake();
+        else active -= 1;
+      });
       try { reply(200, normalizeAnswer(await released, manifest, limits.responseBytes)); }
       catch (error) { reply(error?.publicCode === "timeout" ? 504 : 503, { error: error?.publicCode === "timeout" ? "timeout" : "unavailable" }); }
     } catch { reply(503, { error: "unavailable" }); }

@@ -14,8 +14,13 @@ access policy, credentials or hosting. No package publication is required.
 Set `DINKUS_GUIDE_SERVICE_TOKEN` through the deployment's supported secret
 consumer. It must have at least 32 non-whitespace characters. Do not put it in
 browser code, a URL, source control or logs. The service compares Bearer tokens
-in constant time and does not forward this service token to its CLI child.
-`DINKUS_GUIDE_SERVICE_PORT` is the optional local listener port.
+in constant time and does not forward this service token to providers or child
+processes. `DINKUS_GUIDE_SERVICE_PORT` is the optional local listener port.
+
+At startup, `createAskService` verifies the pinned corpus and optional
+embeddings cache once and pre-warms the in-memory SQLite FTS5 index so each
+`POST /ask` reuses the resident corpus and index in-process rather than
+spawning a fresh CLI process and reloading the corpus per request.
 
 ## Wire contract
 
@@ -29,9 +34,7 @@ Only `POST /ask` is available. Send `Content-Type: application/json`,
 No history, conversation identifier, model, endpoint, instructions, user identity
 or arbitrary control fields are accepted. Each question is independent. There
 are no cookies, CORS allowance, action tools, generic command routes or corpus
-administration routes. The service uses a fixed Node executable and fixed CLI
-path/arguments, with `--` before the question. Shell syntax and option-like text
-remain question data.
+administration routes. Shell syntax and option-like text remain question data.
 
 Success is the completed response, never raw streamed tokens:
 
@@ -76,19 +79,28 @@ latency or throughput promises. The EmDash host may impose a shorter deadline.
 | `BODY_BYTES` | 16384 | 65536 |
 | `RESPONSE_BYTES` | 65536 | 1048576 |
 | `DURATION_MS` | 90000 | 90000 |
-| `CONCURRENCY` | 2 | 16 |
+| `CONCURRENCY` | 4 | 16 |
+| `QUEUE_SIZE` | 8 | 64 |
 | `REQUESTS_PER_MINUTE` | 20 | 600 |
 
-All values must be positive integers. The rate cap is global for this single
-listener process, with no waiting queue; it is not a per-visitor identity system
-or a distributed rate limiter. Keep a single listener for a controlled pilot.
-Multiple replicas require a separately reviewed shared admission boundary.
-The listener caps simultaneous connections at 64. Deployment-specific ingress
-limits and the website's trusted-client controls remain separate responsibilities.
+All values must be non-negative integers (`QUEUE_SIZE` allows `0` to `64`; all
+other bounds require at least `1`). The rate cap is global for this single
+listener process, with a bounded FIFO waiting queue (`QUEUE_SIZE`, default `8`)
+for bursts above `CONCURRENCY` (`4`); it is not a per-visitor identity system
+or a distributed rate limiter. When all `CONCURRENCY` slots and all `QUEUE_SIZE`
+wait slots are full (or the global rate cap is reached), new requests are
+rejected immediately with `429 overloaded`. Keep a single listener for a
+controlled pilot. Multiple replicas require a separately reviewed shared
+admission boundary. The listener caps simultaneous connections at 64.
+Deployment-specific ingress limits and the website's trusted-client controls
+remain separate responsibilities.
 
-Timeout and client disconnect abort the owned CLI process. Its concurrency slot
-is released only after process closure, with SIGKILL after a 500ms SIGTERM grace
-period. An HTTP timeout alone never admits replacement work into that slot.
+Timeout and client disconnect abort queued waiters immediately (removing them
+from the FIFO queue without occupying an execution slot) and propagate
+`AbortSignal` cancellation to in-flight provider requests or owned CLI child
+processes. An execution slot is released or handed off to the next queued
+request only after the in-flight execution actually finishes. An HTTP timeout
+alone never admits replacement work into a still-running slot.
 The public development evaluator stays separate; no evaluation runs per ask.
 Retrieval, output validation and the no-provider-fallback policy remain Guide's.
 

@@ -6,7 +6,7 @@ try {
   const port = Number(process.env.DINKUS_GUIDE_SERVICE_PORT ?? 8789);
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("Invalid port");
   const names = { questionCharacters: "QUESTION_CHARACTERS", bodyBytes: "BODY_BYTES", responseBytes: "RESPONSE_BYTES",
-    durationMs: "DURATION_MS", concurrency: "CONCURRENCY", requestsPerMinute: "REQUESTS_PER_MINUTE" };
+    durationMs: "DURATION_MS", concurrency: "CONCURRENCY", queueSize: "QUEUE_SIZE", requestsPerMinute: "REQUESTS_PER_MINUTE" };
   const limits = Object.fromEntries(Object.entries(names).filter(([, name]) => process.env[`DINKUS_GUIDE_SERVICE_${name}`] !== undefined)
     .map(([key, name]) => [key, Number(process.env[`DINKUS_GUIDE_SERVICE_${name}`])]));
   const server = await createAskService({ token: process.env.DINKUS_GUIDE_SERVICE_TOKEN, limits });
