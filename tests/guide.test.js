@@ -74,7 +74,11 @@ test("instruction overrides and secret disclosure requests abstain while token d
   for (const supportedQuery of [
     "How does the Admin make an EmDash API token for an agent?",
     "Where are runtime secrets such as the service token set?",
-    "What happens when a citation sourceId is forged?"
+    "What happens when a citation sourceId is forged?",
+    "Where are runtime secrets such as the service token set to avoid leaking secrets?",
+    "Where are runtime secrets set so the service token is never revealed in source?",
+    "How do runtime secrets keep the service token from leaking into source?",
+    "What prevents an agent from leaking its API token?"
   ]) {
     const answered = await answerQuestion(supportedQuery, tokenCorpus);
     assert.equal(answered.status, "answered", supportedQuery);

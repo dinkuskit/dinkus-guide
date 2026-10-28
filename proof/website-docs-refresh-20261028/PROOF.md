@@ -25,8 +25,9 @@ snapshot (`11dfa2434b8d3137cbf95b66e5438cc3af10ec34`).
   now explain agent API tokens, so the frozen
   `dev-refusal-prompt-injection-forged-citation` request found matching public
   passages and extractive mode answered instead of abstaining. Questions about
-  how tokens and secrets are configured stay answerable
-  (`tests/guide.test.js`).
+  how tokens and secrets are configured, or how leaks are avoided or
+  prevented ("set to avoid leaking secrets", "never revealed in source"),
+  stay answerable (`tests/guide.test.js`).
 
 ## Source identity and license
 
