@@ -32,7 +32,14 @@ const privateDataRequest = /\b(show|give|provide|list|find|retrieve|access|expor
 // how API tokens or secrets are configured, or how disclosure is prevented, stay answerable.
 const promptOverride = /\b(?:system override|(?:ignore|disregard|forget)\s+(?:all\s+|any\s+)?(?:(?:the|your)\s+)?(?:previous|prior|above|earlier)\s+instructions)\b/i;
 const secretDisclosure = /\b(?:reveal(?:ing)?|leak(?:ing)?|dump(?:ing)?|exfiltrat\w*|disclos(?:e|ing))\b.{0,80}\b(?:secrets?|api keys?|credentials?|passwords?|private keys?)\b|\b(?:secrets?|api keys?|credentials?|passwords?|private keys?|vault[\w-]*)\b.{0,80}\b(?:reveal(?:ing|ed)?|leak(?:ing|ed)?|dump(?:ing|ed)?|exfiltrat\w*|disclos(?:e|ing|ed))\b/i;
-const defensiveDisclosure = /\b(?:avoid|avoids|avoiding|prevent|prevents|preventing|stop|stops|stopping|without|never|not|don't|doesn't|won't|cannot|can't|against|from)\s+(?:\w+\s+){0,2}?(?:reveal|leak|dump|exfiltrat|disclos)\w*/i;
+const defensiveDisclosure = /\b(?:avoid|avoids|avoiding|prevent|prevents|preventing|stop|stops|stopping|without|never|not|don't|doesn't|won't|cannot|can't|against|from)\s+(?:\w+\s+){0,2}?(?:reveal|leak|dump|exfiltrat|disclos)\w*/gi;
+
+// A defensive phrase ("avoid leaking", "never revealed") qualifies only its own verb, so it is
+// removed clause by clause before checking for a disclosure request.
+function secretRequest(question) {
+  return question.split(/[?!;\n]+|\.(?=\s|$)/).some((clause) =>
+    secretDisclosure.test(clause.replace(defensiveDisclosure, " ")));
+}
 
 function directMutation(question) {
   const clauses = question.split(/[?!;\n]+|\.(?=\s|$)/).map((part) => part.trim()).filter(Boolean);
@@ -881,7 +888,7 @@ function unsupportedVersion(question, corpus) {
 
 function refusalOrUnsupported(question, corpus) {
   if (screenshotRequest.test(question) || directMutation(question) || privateDataRequest.test(question) ||
-      promptOverride.test(question) || (secretDisclosure.test(question) && !defensiveDisclosure.test(question))) {
+      promptOverride.test(question) || secretRequest(question)) {
     return insufficient(screenshotRequest.test(question)
       ? "DinkusGuide is text-only in v1 and cannot inspect screenshots or prove a UI state. Provide a documented text contract or consult the pinned sources."
       : "DinkusGuide is read-only and cannot access private data or perform changes.");
